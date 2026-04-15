@@ -1,10 +1,5 @@
-# Project Name
+# Software License Server Immune to Software and Microarchitectural Attack
 
-> One-line description of what this project does.
-
-## Overview
-
-<!-- Provide a brief summary of the project, its goals, and who it's for. -->
 
 ## Getting Started
 
