@@ -1,42 +1,55 @@
-# Software License Server Immune to Software and Microarchitectural Attack
+<h1 align="center">CloseCode</h1>
 
+<p align="center">The <s>open</s> closed source AI coding agent.</p>
 
-## Getting Started
+<p align="center">
+  <a href="https://github.com/pablordoricaw/columbia-ms-courses-home" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/github-columbia%20courses%20home-blue?style=flat-square&logo=github&color=%236CACE4" alt="GitHub Repository of Columbia Courses Taken">
+  </a>
+  <img alt="License: Proprietary" src="https://img.shields.io/badge/license-proprietary-red?style=flat-square" />
+  <img alt="Access: Denied" src="https://img.shields.io/badge/access-denied-black?style=flat-square" />
+</p>
 
-### Prerequisites
+> CloseCode is a final project for the **COMSE-6424 Hardware Security** course at Columbia University,
+> built under the *Software License Server Immune to Software and Microarchitectural Attack* project option.
+> Unlike OpenCode, this one will cost you — and it *knows* if you haven't paid.
 
-<!-- List any software, tools, or accounts needed before setup. -->
+- **Team:** Null and Void
+- **Semester:** Spring 2026
+- **Instructor:** Simha Sethumadhavan
+- **TA(s):**
+
+---
 
 ### Installation
 
-<!-- Step-by-step instructions to set up the project locally. -->
-
 ```bash
-# Example
-git clone https://github.com/<user>/<repo>.git
-cd <repo>
+# You cannot YOLO this one
+curl -fsSL https://closecode.ai/install | bash  # just kidding, you need a license first
 ```
 
-## Usage
+> [!WARNING]
+> CloseCode will not run without a valid, node-locked license tied to your machine.
+> Attempting to patch, debug, or bypass the license check is the point of this project — good luck.
+
+### Usage
 
 <!-- Show how to run or use the project. Include code snippets or commands. -->
 
-## Project Structure
+### Project Structure
 
-<!-- Describe the high-level directory layout and what each folder contains. -->
-
-```
+```text
 .
-├── docs/          # Documentation and figures
-├── scripts/       # Utility scripts for dev workflow
-├── ...
+├── docs/
+│   ├── adr/           # Architecture Decision Records
+│   ├── figs/          # Figures and diagrams
+│   ├── THREAT_MODEL.md
+│   ├── MITIGATIONS.md
+│   └── README.md
+├── scripts/           # Utility scripts for dev workflow
 └── README.md
 ```
 
-## Contributing
+### License
 
-<!-- Explain how others can contribute: branching strategy, PR process, code style, etc. -->
-
-## License
-
-<!-- State the license or link to a LICENSE file. -->
+Proprietary. All rights reserved. Your machine has already been fingerprinted.
