@@ -1,7 +1,7 @@
 # ADR-0003: TEE as Additive Security Enhancement with Software Hardening as Baseline
 
 **Date:** 2026-04-18  
-**Status:** Accepted  
+**Status:** Superseded by [ADR-0006](0006-tee-as-hard-requirement.md)  
 **Deciders:** Null and Void
 
 ---
@@ -73,3 +73,11 @@ hardening layer is the portable baseline that satisfies the portability requirem
   AMD has no suitable equivalent and is intentionally excluded from TEE enhancement.
 - **Honesty:** The graceful degradation model allows the team to rigorously document residual risk
   per platform, directly satisfying the project rubric's evaluation requirement.
+
+---
+
+> **Note:** This decision was superseded by [ADR-0006](0006-tee-as-hard-requirement.md), which
+> eliminates the software hardening fallback path and requires TEE hardware as a minimum system
+> requirement. The rationale is that the fallback path was the weakest link in the design and
+> its elimination simplifies the architecture, reduces attack surface, and enables a cleaner
+> hardware fingerprinting design based solely on TEE attestation.
