@@ -17,6 +17,45 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
                 description "Terminal coding agent. Calls the TEE Module (an in-process platform shim) via the narrow C ABI (cgo) for license verification and prompt signing, then forwards signed prompts to the AI Proxy."
                 technology "Go, Bubble Tea, cgo"
                 tags "Local" "TUI"
+
+                # ──────────────────────────────────────────
+                # Components inside CloseCode App
+                # ──────────────────────────────────────────
+                tuiRenderer = component "TUI Renderer" {
+                    description "Drives the Bubble Tea terminal UI. Accepts raw user input and displays streamed LLM responses. Delegates all business logic to other components."
+                    technology "Go, Bubble Tea"
+                    tags "Local" "Component"
+                }
+
+                licenseManager = component "License Manager" {
+                    description "Sole owner of the TEE lifecycle and License Server handshake. Produces signed payloads for outgoing prompts."
+                    technology "Go"
+                    tags "Local" "Component"
+                }
+
+                teeModule = component "TEE Module" {
+                    description "In-process C ABI shim (tee_init / tee_sign / tee_destroy). Platform-specific: Swift dylib on Apple Silicon, C/C++ ECALL shim on Intel SGX."
+                    technology "Swift @_cdecl · C/C++ + SGX SDK (Intel)"
+                    tags "Local" "TEEModule" "Component"
+                }
+
+                astEngine = component "AST Engine" {
+                    description "[Stub] Parses the codebase into an AST and produces structured file diffs for prompt context enrichment."
+                    technology "Go, tree-sitter"
+                    tags "Local" "Stub" "Component"
+                }
+
+                ragEngine = component "RAG Engine" {
+                    description "[Stub] Maintains a local vector index and retrieves top-k relevant code snippets for prompt context enrichment."
+                    technology "Go, local embeddings"
+                    tags "Local" "Stub" "Component"
+                }
+
+                promptPipeline = component "Prompt Pipeline" {
+                    description "Enriches the user prompt with AST and RAG context, requests a signature from the License Manager, and dispatches the signed payload to the AI Proxy."
+                    technology "Go"
+                    tags "Local" "Component"
+                }
             }
 
             licenseServer = container "License Server" {
@@ -52,22 +91,26 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         # ──────────────────────────────────────────
         user -> closeCode "Enters natural language prompts to edit code on" "Interactive TUI"
         user -> tui "Enters natural language prompts to edit code on" "Interactive TUI"
+        user -> tuiRenderer "Types natural language prompt" "Interactive TUI"
 
         # ──────────────────────────────────────────
-        # Relationships — App ↔ TEE platform APIs
-        # (TEE Module is an in-process component; its
-        #  external calls surface here at container level)
+        # Relationships — Component level (inside CloseCode App)
         # ──────────────────────────────────────────
-        tui -> teeAPIApple "Performs signing and attestation via in-process TEE Module" "Swift @_cdecl → CryptoKit"
-        tui -> teeAPISGX "Performs signing and attestation via in-process TEE Module" "C ECALL → SGX SDK"
+        tuiRenderer -> licenseManager "Triggers license init on startup and destroy on exit" "In-process"
+        tuiRenderer -> promptPipeline "Forwards raw user prompt" "In-process"
 
-        # ──────────────────────────────────────────
-        # Relationships — App (local) ↔ Cloud
-        # ──────────────────────────────────────────
-        tui -> licenseServer "Sends TEE attestation and signed challenge for license verification" "HTTPS/TLS"
-        licenseServer -> tui "Returns signed session token" "HTTPS/TLS"
-        tui -> aiProxy "Sends prompt with session token" "HTTPS/TLS"
-        aiProxy -> tui "Streams LLM response" "HTTPS/TLS (SSE)"
+        licenseManager -> teeModule "Calls tee_init / tee_sign / tee_destroy on" "C ABI via cgo"
+        licenseManager -> licenseServer "Sends TEE attestation and signed challenge" "HTTPS/TLS"
+        licenseServer -> licenseManager "Returns signed session token" "HTTPS/TLS"
+
+        astEngine -> promptPipeline "Provides AST diff and code structure context to" "In-process"
+        ragEngine -> promptPipeline "Provides top-k retrieved code snippets to" "In-process"
+        promptPipeline -> licenseManager "Requests signed payload and session token from" "In-process"
+        promptPipeline -> aiProxy "Dispatches signed prompt with session token to" "HTTPS/TLS"
+        aiProxy -> promptPipeline "Streams LLM response to" "HTTPS/TLS (SSE)"
+
+        teeModule -> teeAPIApple "Performs signing and attestation via in-process TEE Module" "Swift @_cdecl → CryptoKit"
+        teeModule -> teeAPISGX "Performs signing and attestation via in-process TEE Module" "C ECALL → SGX SDK"
 
         # ──────────────────────────────────────────
         # Relationships — AI Proxy ↔ AI Provider
@@ -79,12 +122,6 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         # Deploy-time trust: License Server public key → Proxy config
         # ──────────────────────────────────────────
         licenseServer -> aiProxy "Provides public key for session token validation" "Deploy-time config"
-
-        # ──────────────────────────────────────────
-        # Context-level relationships (system → external TEE platforms)
-        # ──────────────────────────────────────────
-        closeCode -> teeAPIApple "Performs signing and attestation via (Apple Silicon)" "CryptoKit / Secure Enclave"
-        closeCode -> teeAPISGX "Performs signing and attestation via (Intel)" "SGX SDK / ECALL"
 
     }
 
@@ -112,6 +149,23 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             autolayout lr
         }
 
+        component tui "CloseCode-App-Components" {
+            include user
+            include tuiRenderer
+            include licenseManager
+            include teeModule
+            include astEngine
+            include ragEngine
+            include promptPipeline
+            include licenseServer
+            include aiProxy
+            include teeAPIApple
+            include teeAPISGX
+            include aiModelApi
+            description "C4 Level 3 — Component: Internal components of the CloseCode App. The License Manager is the sole owner of the TEE lifecycle and License Server handshake. AST and RAG Engines enrich prompts with code context before signing and dispatch."
+            autolayout lr 50 100
+        }
+
         styles {
             element "Person" {
                 shape Person
@@ -133,6 +187,19 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
                 background "#7b4fa8"
                 color "#ffffff"
                 fontSize 24
+            }
+            element "TEEModule" {
+                color "#1a5fa8"
+                stroke "#1a5fa8"
+                fontSize 24
+            }
+            element "Component" {
+                shape Component
+            }
+            element "Stub" {
+                color "#888888"
+                fontSize 24
+                border "Dashed"
             }
             element "Local" {
                 color "#1a5fa8"
