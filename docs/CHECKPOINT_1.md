@@ -17,7 +17,13 @@
 
 ## Introduction
 
-<!-- Add brief description of what a terminal based AI coding agent application is and reference Claude Code (most popular), and Open Code (the open source one which this project is a riff off) -->
+CloseCode is a terminal-based AI coding agent application. In this style of system, the user stays in a command-line interface, describes a software engineering task in natural language, and the agent reads project context, prepares a prompt, sends the request to a model provider, and streams code-oriented output back into the terminal. The interaction model is intentionally lightweight and developer-centric: rather than working inside a chat website, the user works directly from a local repository and iterates in a tight prompt-edit-run loop.
+
+This project is inspired by both commercial and open-source AI coding agents. Anthropic's Claude Code is a well-known example of a terminal-native coding agent experience, while Open Code is an open-source riff on the same interaction model. CloseCode takes that basic product shape and explores a different systems question: how can a terminal AI coding agent enforce licensing even when the client machine is attacker-controlled?
+
+The core idea behind CloseCode is to treat the client operating system as untrusted and bind the license to hardware-backed cryptographic identity rather than to mutable software identifiers. Instead of trusting a normal application process to prove that it is licensed, CloseCode uses a Trusted Execution Environment (TEE), specifically Apple Secure Enclave first and Intel SGX later, to hold a device private key that should be non-exportable. The License Server verifies attestation at activation time, uses fresh nonces during launch-time challenge-response, and issues short-lived session tokens that the AI Proxy validates before forwarding requests to the upstream model provider.
+
+This security-first design is motivated by the threat model for modern AI coding tools. Because these tools provide direct access to a paid model endpoint and run on the attacker's own hardware, they are natural targets for patching, replay, token theft, API key extraction, and microarchitectural attacks against normal-world memory. CloseCode therefore combines a TEE-backed device identity, a minimal always-online License Server, and an AI Proxy that keeps the upstream provider key off the client altogether. The result is a project that is simultaneously about licensing, systems architecture, and hardware-assisted security.
 
 ## System Architecture
 
@@ -36,33 +42,33 @@ I modeled the architecture of CloseCode down to the Component level of the C4 mo
 
 First off is the Context level diagram.
 
-<img src="./figs/c4-context-view.png" width=500>
+<img src="./figs/c4-context-view.png" width="500">
 
 ### Level: Container Diagram
 
-<img src="./figs/c4-container-view.png width=500>
+<img src="./figs/c4-container-view.png" width="500">
 
 ### Level: Component Diagrams
 
 #### ClodeCode App Component Diagram
 
-<img src="./figs/c4-component-view-closecode-app.png width=800>
+<img src="./figs/c4-component-view-closecode-app.png" width="800">
 
 #### License Server Component Diagram
 
-<img src="./figs/c4-component-view-license-server.png width=600>
+<img src="./figs/c4-component-view-license-server.png" width="600">
 
 #### AI Proxy Component Diagram
 
-<img src="./figs/c4-component-view-ai-proxy.png width=600>
+<img src="./figs/c4-component-view-ai-proxy.png" width="600">
 
 #### All Components Diagram
 
-<img src="./figs/c4-component-view-all.png width=800>
+<img src="./figs/c4-component-view-all.png" width="800">
 
 ### Deployment Diagram
 
-<img src="./figs/c4-deployment-view.png width=500>
+<img src="./figs/c4-deployment-view.png" width="500">
 
 ## Threat Model
 
@@ -379,4 +385,17 @@ comse6424-hw-security-project/
 
 ## References
 
-<!-- Add references used for all above sections -->
+1. Simon Brown. *The C4 model for visualising software architecture.* https://c4model.com/
+2. Simon Brown. *Structurizr documentation.* https://docs.structurizr.com/
+3. Structurizr Playground. https://playground.structurizr.com/
+4. Anthropic. *Claude Code overview / documentation.* https://docs.anthropic.com/
+5. Open Code project repository. https://github.com/sst/opencode
+6. Microsoft. *The STRIDE Threat Model.* https://learn.microsoft.com/en-us/azure/security/develop/threat-modeling-tool-threats
+7. NIST. *Secure Hash Standard (SHS), FIPS 180-4.* https://csrc.nist.gov/pubs/fips/180-4/upd1/final
+8. NIST. *Recommendation for Keyed-Hash Message Authentication Codes (HMAC), FIPS 198-1.* https://csrc.nist.gov/pubs/fips/198-1/final
+9. NIST. *Digital Signature Standard (DSS), FIPS 186-5.* https://csrc.nist.gov/pubs/fips/186-5/final
+10. Apple Developer Documentation. *App Attest.* https://developer.apple.com/documentation/devicecheck/establishing_your_app_s_integrity
+11. Apple Developer Documentation. *Protecting keys with the Secure Enclave.* https://developer.apple.com/documentation/security/protecting_keys_with_the_secure_enclave
+12. Intel. *Intel Software Guard Extensions (Intel SGX).* https://www.intel.com/content/www/us/en/developer/tools/software-guard-extensions/overview.html
+13. Pulumi. *Pulumi Go SDK / GCP provider documentation.* https://www.pulumi.com/docs/
+14. Martin Fowler. *Architecture Decision Records.* https://martinfowler.com/articles/adr.html
