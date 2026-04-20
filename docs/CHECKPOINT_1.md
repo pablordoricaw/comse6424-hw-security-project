@@ -42,33 +42,33 @@ I modeled the architecture of CloseCode down to the Component level of the C4 mo
 
 First off is the Context level diagram.
 
-<img src="./figs/c4-context-view.png" width="500">
+<img src="./figs/c4-context-view.png" width="1200">
 
 ### Level: Container Diagram
 
-<img src="./figs/c4-container-view.png" width="500">
+<img src="./figs/c4-container-view.png" width="1200">
 
 ### Level: Component Diagrams
 
 #### ClodeCode App Component Diagram
 
-<img src="./figs/c4-component-view-closecode-app.png" width="800">
+<img src="./figs/c4-component-view-closecode-app.png" width="1200">
 
 #### License Server Component Diagram
 
-<img src="./figs/c4-component-view-license-server.png" width="600">
+<img src="./figs/c4-component-view-license-server.png" width="1200">
 
 #### AI Proxy Component Diagram
 
-<img src="./figs/c4-component-view-ai-proxy.png" width="600">
+<img src="./figs/c4-component-view-ai-proxy.png" width="1200">
 
 #### All Components Diagram
 
-<img src="./figs/c4-component-view-all.png" width="800">
+<img src="./figs/c4-component-view-all.png" width="1200">
 
 ### Deployment Diagram
 
-<img src="./figs/c4-deployment-view.png" width="500">
+<img src="./figs/c4-deployment-view.png" width="1200">
 
 ## Threat Model
 
