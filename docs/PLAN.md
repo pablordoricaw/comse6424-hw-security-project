@@ -37,6 +37,10 @@ comse6424-hw-security-project/
 ├── tee/
 │   ├── apple/              # Xcode project / Swift package for Secure Enclave dylib
 │   └── sgx/                # SGX enclave project (Phase 3)
+├── infra/
+│   ├── Pulumi.yaml         # Pulumi project definition
+│   ├── Pulumi.dev.yaml     # Stack config (example)
+│   └── main.go             # Pulumi Go program: GCP VMs, firewall rules, instance metadata
 ├── docs/
 │   ├── adr/                # Architecture Decision Records
 │   ├── architecture/       # Structurizr DSL workspace
@@ -44,10 +48,9 @@ comse6424-hw-security-project/
 │   ├── THREAT_MODEL.md     # STRIDE threat model
 │   └── DEMO_SCRIPT.md      # Demo walkthrough (written in Phase 2)
 ├── scripts/
-│   ├── deploy-gcp.sh       # GCP VM provisioning and binary deployment
 │   └── smoke-test.sh       # End-to-end smoke test against live servers
-├── go.work                 # Go workspace: closecode, license-server, ai-proxy modules
-└── Makefile                # Top-level build, test, and deploy targets
+├── go.work                 # Go workspace: closecode, license-server, ai-proxy, infra modules
+└── Makefile                # Top-level build, test, lint, and deploy targets
 ```
 
 ---
@@ -221,19 +224,24 @@ Each test below maps directly to a threat in `THREAT_MODEL.md`.
 
 - **Output:** M7 — all tests pass and results documented in a validation table
 
-### Step 2.2 — GCP deployment
+### Step 2.2 — GCP deployment with Pulumi
 
-- Write `scripts/deploy-gcp.sh`:
-  - Provision two Compute Engine VMs in `us-east1` (License Server VM, AI Proxy VM)
-  - Copy binaries via `gcloud compute scp`
-  - Set env vars: `SERVER_SECRET`, `LICENSE_SERVER_PRIVATE_KEY`,
-    `LICENSE_SERVER_PUBLIC_KEY`, `GEMINI_API_KEY`
-  - Start services as `systemd` units
+- Initialise `infra/` as a Pulumi Go project (`pulumi new gcp-go`); add to `go.work`
+- Implement `infra/main.go` using the Pulumi Go SDK to declare:
+  - Two Compute Engine VMs in `us-east1`: License Server VM and AI Proxy VM
+  - Firewall rules: allow HTTPS (443) inbound to each VM; deny all other inbound
+  - Instance metadata / startup scripts to install the Go binary and register a
+    `systemd` service unit for each server
+  - Secrets injected via Pulumi config (`pulumi config set --secret`):
+    `SERVER_SECRET`, `LICENSE_SERVER_PRIVATE_KEY`, `LICENSE_SERVER_PUBLIC_KEY`,
+    `GEMINI_API_KEY`
+- Validate infrastructure with `pulumi preview` before applying
+- Bring up the stack with `pulumi up`
 - Write `scripts/smoke-test.sh`:
-  - Run the full activation → challenge → verify → prompt → response flow against live GCP
-    servers
+  - Run the full activation → challenge → verify → prompt → response flow against live
+    GCP servers
   - Assert HTTP response codes and non-empty response body
-- Run smoke test against deployed GCP environment
+- Run smoke test against deployed stack; confirm all assertions pass
 - **Output:** M8 (deployment)
 
 ### Step 2.3 — Demo script
@@ -299,6 +307,7 @@ verification paths are added.
 | Integration | Cross-component flows (activation, session, proxy forwarding) | `go test` against a test server instance |
 | Security validation | Threat model controls — bypass attempts, replay, token forgery | Scripted negative-path tests (see Phase 2) |
 | Manual | TEE memory boundary, debugger inspection, TUI behaviour | Documented manual steps on target hardware |
+| Infrastructure | GCP resource definitions correct before apply | `pulumi preview` against target GCP project |
 | Smoke | End-to-end against live GCP deployment | `scripts/smoke-test.sh` |
 
 ### Coverage targets
@@ -319,7 +328,7 @@ verification paths are added.
 |:---|:---|
 | Phase 1 — 2 | Apple Silicon Mac (M1 or later) for TEE Module and manual validation |
 | Phase 3 | Intel Xeon or vPro machine with SGX enabled in BIOS |
-| GCP deployment | Any machine with `gcloud` CLI and project access |
+| GCP deployment | Any machine with Pulumi CLI, Go toolchain, gcloud CLI, and GCP project access |
 
 ### What is explicitly not tested
 
