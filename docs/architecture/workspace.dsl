@@ -101,6 +101,27 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
                 description "Stateless service that validates session tokens and forwards authenticated prompts to the AI Model API with the injected Gemini API key."
                 technology "Go, HTTPS/TLS"
                 tags "Cloud"
+
+                # ──────────────────────────────────────────
+                # Components inside AI Proxy
+                # ──────────────────────────────────────────
+                proxyHttpHandler = component "HTTP Handler" {
+                    description "Single POST endpoint that receives the signed prompt and session token from the Prompt Pipeline over HTTPS/TLS. Delegates to the Token Validator before any forwarding occurs."
+                    technology "Go, net/http"
+                    tags "Cloud" "Component"
+                }
+
+                tokenValidator = component "Token Validator" {
+                    description "Verifies the session token signature against the License Server public key loaded from env config at startup. Rejects expired tokens and invalid signatures. Fail closed — no fallback."
+                    technology "Go"
+                    tags "Cloud" "Component"
+                }
+
+                forwardingHandler = component "Forwarding Handler" {
+                    description "Strips the session token, injects the AI provider API key into request headers, relays the request to the AI Model API, and streams the SSE response back to the Prompt Pipeline via io.Copy."
+                    technology "Go"
+                    tags "Cloud" "Component"
+                }
             }
         }
 
@@ -148,8 +169,8 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         astEngine -> promptPipeline "Provides AST diff and code structure context to" "In-process"
         ragEngine -> promptPipeline "Provides top-k retrieved code snippets to" "In-process"
         promptPipeline -> licenseManager "Requests signed payload and session token from" "In-process"
-        promptPipeline -> aiProxy "Dispatches signed prompt with session token to" "HTTPS/TLS"
-        aiProxy -> promptPipeline "Streams LLM response to" "HTTPS/TLS (SSE)"
+        promptPipeline -> proxyHttpHandler "Dispatches signed prompt with session token to" "HTTPS/TLS"
+        forwardingHandler -> promptPipeline "Streams LLM response to" "HTTPS/TLS (SSE)"
 
         teeModule -> teeAPIApple "Performs signing and attestation via in-process TEE Module" "Swift @_cdecl → CryptoKit"
         teeModule -> teeAPISGX "Performs signing and attestation via in-process TEE Module" "C ECALL → SGX SDK"
@@ -170,7 +191,15 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         attestationVerifier -> intelIAS "Validates SGX quote against" "HTTPS/TLS"
 
         # ──────────────────────────────────────────
-        # Relationships — AI Proxy ↔ AI Provider
+        # Relationships — AI Proxy components
+        # ──────────────────────────────────────────
+        proxyHttpHandler -> tokenValidator "Forwards session token for validation to" "In-process"
+        tokenValidator -> forwardingHandler "Passes validated request to" "In-process"
+        forwardingHandler -> aiModelApi "Forwards prompt with injected AI provider API key to" "HTTPS/TLS"
+        aiModelApi -> forwardingHandler "Streams LLM response to" "HTTPS/TLS (SSE)"
+
+        # ──────────────────────────────────────────
+        # Relationships — AI Proxy ↔ AI Provider (container level)
         # ──────────────────────────────────────────
         aiProxy -> aiModelApi "Forwards prompt with injected Gemini API key" "HTTPS/TLS"
         aiModelApi -> aiProxy "Streams LLM response" "HTTPS/TLS (SSE)"
@@ -185,12 +214,6 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         # call from any License Server component. It is intentionally modeled
         # only at the container level.
         licenseServer -> aiProxy "Provides public key for session token validation" "Deploy-time config"
-
-        # ──────────────────────────────────────────
-        # Context-level relationships (system → external TEE platforms)
-        # ──────────────────────────────────────────
-        closeCode -> teeAPIApple "Performs signing and attestation via (Apple Silicon)" "CryptoKit / Secure Enclave"
-        closeCode -> teeAPISGX "Performs signing and attestation via (Intel)" "SGX SDK / ECALL"
 
     }
 
@@ -251,6 +274,16 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             include appleCA
             include intelIAS
             description "C4 Level 3 — Component: Internal components of the License Server. The HTTP Handler routes activation and per-launch session flows to their respective services. The Attestation Verifier calls Apple or Intel CAs only at activation time. The Session Service owns nonce state in-process."
+            autolayout lr 50 100
+        }
+
+        component aiProxy "AIProxy-Components" {
+            include promptPipeline
+            include proxyHttpHandler
+            include tokenValidator
+            include forwardingHandler
+            include aiModelApi
+            description "C4 Level 3 — Component: Internal components of the AI Proxy. The Token Validator enforces fail-closed session token verification before any forwarding occurs. The Forwarding Handler is the only component that holds the AI provider API key, injected at deploy time."
             autolayout lr 50 100
         }
 
