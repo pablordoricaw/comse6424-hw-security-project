@@ -1,7 +1,7 @@
 # ADR-0007: Hardware Fingerprinting via TEE Attestation and Challenge-Response Verification
 
 **Date:** 2026-04-18  
-**Status:** Accepted  
+**Status:** Accepted — Amended 2026-04-20 (see Amendment below)  
 **Deciders:** Null and Void
 
 ---
@@ -128,3 +128,66 @@ supports this protocol:
 - **Server complexity:** The license server must implement nonce generation, TTL management,
   and platform-specific attestation verification (Apple CA and Intel IAS/DCAP). This is
   non-trivial but well-documented by both vendors.
+
+---
+
+## Amendment: Attestation Verifier External CA Dependencies (2026-04-20)
+
+During License Server component-level modeling (see `LicenseServer-Components` C4 view), the
+Attestation Verifier was identified as a discrete component with explicit runtime dependencies
+on two external systems. This amendment documents those dependencies and their architectural
+implications.
+
+### External CA Dependencies
+
+The Attestation Verifier calls two external systems **only at activation time** — never during
+per-launch challenge-response:
+
+**Apple Attestation CA (`attest.apple.com`)**
+- Used to validate App Attest certificate chains for Apple Silicon devices
+- The Attestation Verifier submits the attestation object received from the client and
+  verifies the certificate chain terminates at Apple's root CA
+- Apple's App Attest service is a live HTTPS endpoint; the Attestation Verifier requires
+  outbound HTTPS access to `attest.apple.com` at activation time
+- Apple's root CA certificate is pinned in the Attestation Verifier to prevent MITM
+  substitution of a rogue CA
+
+**Intel IAS / DCAP**
+- Used to validate SGX quotes for Intel SGX devices
+- Two sub-options exist:
+  - **Intel Attestation Service (IAS):** A live Intel-hosted HTTPS endpoint
+    (`api.trustedservices.intel.com`). Requires an IAS subscription and API key.
+    Suitable for development and small-scale deployments.
+  - **DCAP (Data Center Attestation Primitives):** An on-premises or cloud-hosted
+    quote verification service using Intel's Provisioning Certification Service (PCS)
+    for certificate retrieval. Suitable for production deployments where IAS latency
+    or availability SLAs are unacceptable.
+  - For the course project, IAS is used. A DCAP migration path does not require
+    changes to the Attestation Verifier's interface — only its backend configuration.
+- Intel's SGX root CA certificate is pinned in the Attestation Verifier.
+
+### Availability Impact
+
+The Attestation Verifier's external CA dependencies mean that **activation requires
+outbound HTTPS access to both Apple and Intel endpoints** (for the respective platform).
+This is an acceptable constraint because:
+- Activation is a one-time operation per device
+- The per-launch challenge-response flow has **no external CA dependency** — it uses
+  only the device public key already stored in the License Store
+- A CA outage blocks new activations but does not affect existing licensed devices
+
+This asymmetry is intentional: the system is designed so that the common path
+(per-launch verification) has no external dependencies beyond the License Server itself,
+consistent with the Fail Closed principle in ADR-0002.
+
+### Architectural Placement
+
+The Attestation Verifier is modeled as a separate component (not folded into the
+Activation Service) because:
+- Its external CA dependencies constitute a distinct trust boundary that should be
+  auditable in isolation
+- Platform-specific verification logic (Apple vs Intel) is cleanly isolated from
+  the Activation Service's license record management logic
+- Future addition of a third TEE platform (e.g., AMD SEV) requires only a new
+  verification backend in the Attestation Verifier, with no changes to the
+  Activation Service
