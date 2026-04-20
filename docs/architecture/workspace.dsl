@@ -133,12 +133,12 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
 
         appleCA = softwareSystem "Apple Attestation CA" {
             description "Apple's certificate authority for App Attest. Used by the Attestation Verifier to validate that a device key pair was genuinely generated inside Apple Silicon Secure Enclave hardware."
-            tags "External"
+            tags "External" "CA"
         }
 
         intelIAS = softwareSystem "Intel IAS / DCAP" {
             description "Intel's Attestation Service (IAS) or Data Center Attestation Primitives (DCAP). Used by the Attestation Verifier to validate SGX quotes against Intel's hardware root of trust."
-            tags "External"
+            tags "External" "CA"
         }
 
         # ──────────────────────────────────────────
@@ -272,12 +272,12 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             appleInfra = deploymentNode "Apple Infrastructure" {
                 description "Apple-operated servers hosting the App Attest attestation service. Called by the License Server Attestation Verifier at activation time only."
                 technology "Apple-operated (attest.apple.com)"
-                tags "External"
+                tags "External" "CA"
 
                 appleCAInstance = infrastructureNode "Apple Attestation CA" {
                     description "App Attest certificate authority endpoint. Validates that a device key pair was generated inside a genuine Apple Silicon Secure Enclave."
                     technology "HTTPS, App Attest API"
-                    tags "External"
+                    tags "External" "CA"
                 }
             }
 
@@ -285,12 +285,12 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             intelInfra = deploymentNode "Intel Infrastructure" {
                 description "Intel-operated servers hosting the Intel Attestation Service (IAS). Called by the License Server Attestation Verifier at activation time only."
                 technology "Intel-operated (api.trustedservices.intel.com)"
-                tags "External"
+                tags "External" "CA"
 
                 intelIASInstance = infrastructureNode "Intel IAS Endpoint" {
                     description "Intel Attestation Service endpoint. Validates SGX quotes against Intel's hardware root of trust."
                     technology "HTTPS, IAS REST API"
-                    tags "External"
+                    tags "External" "CA"
                 }
             }
 
@@ -393,6 +393,11 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             }
             element "External" {
                 background "#4baed4"
+                color "#ffffff"
+                fontSize 24
+            }
+            element "CA" {
+                background "#C0C0C0"
                 color "#ffffff"
                 fontSize 24
             }
