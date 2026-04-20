@@ -15,9 +15,10 @@
 > Unlike OpenCode, this one will cost you — and it *knows* if you haven't paid.
 
 - **Team:** Null and Void
+  - Pablo Ordorica Wiener ([@pablordoricaw](www.github.com/pablordoricaw))
 - **Semester:** Spring 2026
 - **Instructor:** Simha Sethumadhavan
-- **TA(s):**
+- **TA:** Ryan Piersma
 
 ---
 

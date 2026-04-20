@@ -1,8 +1,8 @@
 # Mitigation Traceability Matrix
 
-**Project:** CloseCode — Software License Server Immune to Software and Microarchitectural Attacks  
-**Team:** Null and Void  
-**Status:** Draft  
+**Project:** CloseCode — Software License Server Immune to Software and Microarchitectural Attacks
+**Team:** Null and Void
+**Status:** Draft
 **Last Updated:** 2026-04-16
 
 > This document maps every identified threat from `THREAT_MODEL.md` to a specific mitigation,

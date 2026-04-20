@@ -1,7 +1,7 @@
 # Project Plan
 
-**Project:** CloseCode — Software License Server Immune to Software and Microarchitectural Attacks  
-**Team:** Null and Void  
+**Project:** CloseCode — Software License Server Immune to Software and Microarchitectural Attacks
+**Team:** Null and Void
 **Last Updated:** 2026-04-20
 
 ---
