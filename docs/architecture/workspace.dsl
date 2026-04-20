@@ -62,6 +62,39 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
                 description "Verifies TEE attestation at activation, binds the license to the device public key, and issues short-lived signed session tokens per launch."
                 technology "Go, HTTPS/TLS"
                 tags "Cloud"
+
+                # ──────────────────────────────────────────
+                # Components inside License Server
+                # ──────────────────────────────────────────
+                httpHandler = component "HTTP Handler" {
+                    description "REST API surface. Routes /activate, /deactivate, /challenge, and /verify over HTTPS/TLS. Performs request validation and delegates to Activation or Session Service."
+                    technology "Go, net/http"
+                    tags "Cloud" "Component"
+                }
+
+                activationService = component "Activation Service" {
+                    description "Handles first-time device binding and deactivation. Validates the license ID, invokes the Attestation Verifier, and persists HMAC(server_secret, device_public_key) to the License Store."
+                    technology "Go"
+                    tags "Cloud" "Component"
+                }
+
+                sessionService = component "Session Service" {
+                    description "Handles the per-launch challenge-response flow. Issues a single-use nonce, verifies the TEE-signed challenge, and returns a short-lived signed session token. In-process TTL nonce map for anti-replay."
+                    technology "Go"
+                    tags "Cloud" "Component"
+                }
+
+                attestationVerifier = component "Attestation Verifier" {
+                    description "Verifies platform TEE attestation during activation. Validates Apple App Attest certificate chains against the Apple CA, or Intel SGX quotes against IAS/DCAP. Called only at activation time."
+                    technology "Go"
+                    tags "Cloud" "Component"
+                }
+
+                licenseStore = component "License Store" {
+                    description "Persistent store of license records: license_id mapped to HMAC(server_secret, device_public_key) and license status (active/deactivated). Never stores the raw device public key."
+                    technology "Go, SQLite"
+                    tags "Cloud" "Component" "Store"
+                }
             }
 
             aiProxy = container "AI Proxy" {
@@ -86,6 +119,16 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             tags "External" "TEEPlatform"
         }
 
+        appleCA = softwareSystem "Apple Attestation CA" {
+            description "Apple's certificate authority for App Attest. Used by the Attestation Verifier to validate that a device key pair was genuinely generated inside Apple Silicon Secure Enclave hardware."
+            tags "External"
+        }
+
+        intelIAS = softwareSystem "Intel IAS / DCAP" {
+            description "Intel's Attestation Service (IAS) or Data Center Attestation Primitives (DCAP). Used by the Attestation Verifier to validate SGX quotes against Intel's hardware root of trust."
+            tags "External"
+        }
+
         # ──────────────────────────────────────────
         # Relationships — User
         # ──────────────────────────────────────────
@@ -94,14 +137,13 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         user -> tuiRenderer "Types natural language prompt" "Interactive TUI"
 
         # ──────────────────────────────────────────
-        # Relationships — Component level (inside CloseCode App)
+        # Relationships — CloseCode App components
         # ──────────────────────────────────────────
         tuiRenderer -> licenseManager "Triggers license init on startup and destroy on exit" "In-process"
         tuiRenderer -> promptPipeline "Forwards raw user prompt" "In-process"
 
         licenseManager -> teeModule "Calls tee_init / tee_sign / tee_destroy on" "C ABI via cgo"
-        licenseManager -> licenseServer "Sends TEE attestation and signed challenge" "HTTPS/TLS"
-        licenseServer -> licenseManager "Returns signed session token" "HTTPS/TLS"
+        licenseManager -> httpHandler "Sends activation request and per-launch challenge-response to" "HTTPS/TLS"
 
         astEngine -> promptPipeline "Provides AST diff and code structure context to" "In-process"
         ragEngine -> promptPipeline "Provides top-k retrieved code snippets to" "In-process"
@@ -113,6 +155,21 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         teeModule -> teeAPISGX "Performs signing and attestation via in-process TEE Module" "C ECALL → SGX SDK"
 
         # ──────────────────────────────────────────
+        # Relationships — License Server components
+        # ──────────────────────────────────────────
+        httpHandler -> activationService "Routes /activate and /deactivate to" "In-process"
+        httpHandler -> sessionService "Routes /challenge and /verify to" "In-process"
+
+        activationService -> attestationVerifier "Requests TEE attestation verification from" "In-process"
+        activationService -> licenseStore "Reads and writes license records to" "In-process"
+
+        sessionService -> licenseStore "Reads device public key HMAC for signature verification from" "In-process"
+        sessionService -> licenseManager "Issues signed session token to" "HTTPS/TLS"
+
+        attestationVerifier -> appleCA "Validates App Attest certificate chain against" "HTTPS/TLS"
+        attestationVerifier -> intelIAS "Validates SGX quote against" "HTTPS/TLS"
+
+        # ──────────────────────────────────────────
         # Relationships — AI Proxy ↔ AI Provider
         # ──────────────────────────────────────────
         aiProxy -> aiModelApi "Forwards prompt with injected Gemini API key" "HTTPS/TLS"
@@ -121,7 +178,19 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         # ──────────────────────────────────────────
         # Deploy-time trust: License Server public key → Proxy config
         # ──────────────────────────────────────────
+        # NOTE: This deploy-time relationship has no component-level equivalent.
+        # The Session Service signs tokens with a static asymmetric key loaded
+        # from server config at startup. The AI Proxy receives the corresponding
+        # public key via environment config at deploy time — not via a runtime
+        # call from any License Server component. It is intentionally modeled
+        # only at the container level.
         licenseServer -> aiProxy "Provides public key for session token validation" "Deploy-time config"
+
+        # ──────────────────────────────────────────
+        # Context-level relationships (system → external TEE platforms)
+        # ──────────────────────────────────────────
+        closeCode -> teeAPIApple "Performs signing and attestation via (Apple Silicon)" "CryptoKit / Secure Enclave"
+        closeCode -> teeAPISGX "Performs signing and attestation via (Intel)" "SGX SDK / ECALL"
 
     }
 
@@ -133,6 +202,8 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             include teeAPIApple
             include teeAPISGX
             include aiModelApi
+            include appleCA
+            include intelIAS
             description "C4 Level 1 — System Context: CloseCode as a single system delivering value to the User. Depends on the AI Model API for LLM inference and on the platform TEE API (Apple Secure Enclave or Intel SGX) for license enforcement."
             autolayout lr
         }
@@ -145,6 +216,8 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             include teeAPIApple
             include teeAPISGX
             include aiModelApi
+            include appleCA
+            include intelIAS
             description "C4 Level 2 — Container: Internal deployable units of CloseCode. The CloseCode App contains an in-process TEE Module shim (detailed at Level 3) that calls the platform TEE API — either Apple CryptoKit / Secure Enclave or Intel SGX SDK."
             autolayout lr
         }
@@ -162,7 +235,22 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             include teeAPIApple
             include teeAPISGX
             include aiModelApi
+            include appleCA
+            include intelIAS
             description "C4 Level 3 — Component: Internal components of the CloseCode App. The License Manager is the sole owner of the TEE lifecycle and License Server handshake. AST and RAG Engines enrich prompts with code context before signing and dispatch."
+            autolayout lr 50 100
+        }
+
+        component licenseServer "LicenseServer-Components" {
+            include licenseManager
+            include httpHandler
+            include activationService
+            include sessionService
+            include attestationVerifier
+            include licenseStore
+            include appleCA
+            include intelIAS
+            description "C4 Level 3 — Component: Internal components of the License Server. The HTTP Handler routes activation and per-launch session flows to their respective services. The Attestation Verifier calls Apple or Intel CAs only at activation time. The Session Service owns nonce state in-process."
             autolayout lr 50 100
         }
 
@@ -195,6 +283,9 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             }
             element "Component" {
                 shape Component
+            }
+            element "Store" {
+                shape Cylinder
             }
             element "Stub" {
                 color "#888888"
