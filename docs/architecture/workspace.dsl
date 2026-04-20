@@ -18,9 +18,6 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
                 technology "Go, Bubble Tea, cgo"
                 tags "Local" "TUI"
 
-                # ──────────────────────────────────────────
-                # Components inside CloseCode App
-                # ──────────────────────────────────────────
                 tuiRenderer = component "TUI Renderer" {
                     description "Drives the Bubble Tea terminal UI. Accepts raw user input and displays streamed LLM responses. Delegates all business logic to other components."
                     technology "Go, Bubble Tea"
@@ -63,9 +60,6 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
                 technology "Go, HTTPS/TLS"
                 tags "Cloud"
 
-                # ──────────────────────────────────────────
-                # Components inside License Server
-                # ──────────────────────────────────────────
                 httpHandler = component "HTTP Handler" {
                     description "REST API surface. Routes /activate, /deactivate, /challenge, and /verify over HTTPS/TLS. Performs request validation and delegates to Activation or Session Service."
                     technology "Go, net/http"
@@ -102,9 +96,6 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
                 technology "Go, HTTPS/TLS"
                 tags "Cloud"
 
-                # ──────────────────────────────────────────
-                # Components inside AI Proxy
-                # ──────────────────────────────────────────
                 proxyHttpHandler = component "HTTP Handler" {
                     description "Single POST endpoint that receives the signed prompt and session token from the Prompt Pipeline over HTTPS/TLS. Delegates to the Token Validator before any forwarding occurs."
                     technology "Go, net/http"
@@ -199,22 +190,117 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
         aiModelApi -> forwardingHandler "Streams LLM response to" "HTTPS/TLS (SSE)"
 
         # ──────────────────────────────────────────
-        # Relationships — AI Proxy ↔ AI Provider (container level)
-        # ──────────────────────────────────────────
-        aiProxy -> aiModelApi "Forwards prompt with injected Gemini API key" "HTTPS/TLS"
-        aiModelApi -> aiProxy "Streams LLM response" "HTTPS/TLS (SSE)"
-
-        # ──────────────────────────────────────────
         # Deploy-time trust: License Server public key → Proxy config
         # ──────────────────────────────────────────
-        # NOTE: This deploy-time relationship has no component-level equivalent.
-        # The Session Service signs tokens with a static asymmetric key loaded
-        # from server config at startup. The AI Proxy receives the corresponding
-        # public key via environment config at deploy time — not via a runtime
-        # call from any License Server component. It is intentionally modeled
-        # only at the container level.
         licenseServer -> aiProxy "Provides public key for session token validation" "Deploy-time config"
 
+        # ──────────────────────────────────────────
+        # Deployment environments
+        # ──────────────────────────────────────────
+        developerMachine = deploymentEnvironment "Production" {
+
+            # ── User's local machine ───────────────
+            localMachine = deploymentNode "User's Machine" {
+                description "Developer laptop running Apple Silicon or Intel SGX hardware. Runs the CloseCode App in a terminal session."
+                technology "macOS (Apple Silicon) · Linux (Intel SGX)"
+                tags "Local"
+
+                teeHardware = deploymentNode "TEE Hardware" {
+                    description "Platform-specific Trusted Execution Environment. On Apple Silicon: the Secure Enclave coprocessor. On Intel: the SGX enclave runtime. The device private key never leaves this boundary."
+                    technology "Apple Secure Enclave · Intel SGX"
+                    tags "Local" "TEEPlatform"
+
+                    teeAPIAppleInstance = infrastructureNode "Secure Enclave API" {
+                        description "Apple CryptoKit / Security framework interface to the Secure Enclave. Used by the TEE Module shim at tee_init and tee_sign time."
+                        technology "CryptoKit, Swift"
+                        tags "Local" "TEEPlatform"
+                    }
+
+                    teeAPISGXInstance = infrastructureNode "Intel SGX Runtime" {
+                        description "Intel SGX SDK trusted runtime. Hosts the signed SGX enclave that seals key material to MRENCLAVE and the platform hardware root."
+                        technology "Intel SGX SDK, C/C++"
+                        tags "Local" "TEEPlatform"
+                    }
+                }
+
+                closecodeAppInstance = containerInstance tui
+            }
+
+            # ── GCP: CloseCode cloud services ──────
+            gcpProject = deploymentNode "Google Cloud Platform" {
+                description "GCP project hosting the CloseCode cloud services. License Server and AI Proxy run as separate VM instances."
+                technology "Google Cloud Platform"
+                tags "Cloud"
+
+                gcpRegion = deploymentNode "GCP Region (us-east1)" {
+                    description "Primary deployment region for CloseCode cloud services."
+                    technology "GCP Region"
+                    tags "Cloud"
+
+                    licenseServerVM = deploymentNode "License Server VM" {
+                        description "GCP Compute Engine VM running the License Server binary. Hosts the SQLite License Store on an attached persistent disk."
+                        technology "Compute Engine VM, Debian, Go binary"
+                        tags "Cloud"
+
+                        licenseServerInstance = containerInstance licenseServer
+                    }
+
+                    aiProxyVM = deploymentNode "AI Proxy VM" {
+                        description "GCP Compute Engine VM running the AI Proxy binary. Stateless — no persistent storage. Receives the License Server public key via environment variable at startup."
+                        technology "Compute Engine VM, Debian, Go binary"
+                        tags "Cloud"
+
+                        aiProxyInstance = containerInstance aiProxy
+                    }
+                }
+            }
+
+            # ── GCP: AI Model API ──────────────────
+            gcpGemini = deploymentNode "Google Cloud Platform (Gemini)" {
+                description "Google's infrastructure hosting the Gemini API. Receives authenticated prompt requests forwarded by the AI Proxy."
+                technology "Google Cloud Platform"
+                tags "External"
+
+                geminiApiInstance = infrastructureNode "Gemini API Endpoint" {
+                    description "Gemini model inference endpoint. Accepts HTTPS requests with a valid AI provider API key injected by the AI Proxy."
+                    technology "Gemini API, HTTPS"
+                    tags "External"
+                }
+            }
+
+            # ── Apple infrastructure ───────────────
+            appleInfra = deploymentNode "Apple Infrastructure" {
+                description "Apple-operated servers hosting the App Attest attestation service. Called by the License Server Attestation Verifier at activation time only."
+                technology "Apple-operated (attest.apple.com)"
+                tags "External"
+
+                appleCAInstance = infrastructureNode "Apple Attestation CA" {
+                    description "App Attest certificate authority endpoint. Validates that a device key pair was generated inside a genuine Apple Silicon Secure Enclave."
+                    technology "HTTPS, App Attest API"
+                    tags "External"
+                }
+            }
+
+            # ── Intel infrastructure ───────────────
+            intelInfra = deploymentNode "Intel Infrastructure" {
+                description "Intel-operated servers hosting the Intel Attestation Service (IAS). Called by the License Server Attestation Verifier at activation time only."
+                technology "Intel-operated (api.trustedservices.intel.com)"
+                tags "External"
+
+                intelIASInstance = infrastructureNode "Intel IAS Endpoint" {
+                    description "Intel Attestation Service endpoint. Validates SGX quotes against Intel's hardware root of trust."
+                    technology "HTTPS, IAS REST API"
+                    tags "External"
+                }
+            }
+
+            # ── Deployment-level relationships ─────
+            aiProxyInstance -> geminiApiInstance "Forwarded prompt + Gemini API key" "HTTPS/TLS"
+            geminiApiInstance -> aiProxyInstance "Streamed LLM response" "HTTPS/TLS (SSE)"
+
+            licenseServerInstance -> appleCAInstance "App Attest certificate chain validation (activation only)" "HTTPS/TLS"
+            licenseServerInstance -> intelIASInstance "SGX quote validation (activation only)" "HTTPS/TLS"
+        }
     }
 
     views {
@@ -285,6 +371,12 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             include aiModelApi
             description "C4 Level 3 — Component: Internal components of the AI Proxy. The Token Validator enforces fail-closed session token verification before any forwarding occurs. The Forwarding Handler is the only component that holds the AI provider API key, injected at deploy time."
             autolayout lr 50 100
+        }
+
+        deployment * "Production" "CloseCode-Deployment" {
+            include *
+            description "C4 Level 4 — Deployment: Production environment. License Server and AI Proxy run on GCP Compute Engine VMs (us-east1). CloseCode App runs locally on the user's machine with TEE hardware. AI Model API (Gemini) runs on Google's infrastructure. Apple and Intel attestation endpoints are vendor-operated and contacted at activation time only."
+            autolayout lr 125 125
         }
 
         styles {
