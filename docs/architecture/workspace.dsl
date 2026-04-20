@@ -330,7 +330,33 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             description "C4 Level 2 — Container: Internal deployable units of CloseCode. The CloseCode App contains an in-process TEE Module shim (detailed at Level 3) that calls the platform TEE API — either Apple CryptoKit / Secure Enclave or Intel SGX SDK."
             autolayout lr
         }
-
+        component tui "All-Components" {
+            include user
+            include tuiRenderer
+            include licenseManager
+            include teeModule
+            include astEngine
+            include ragEngine
+            include promptPipeline
+            include licenseManager
+            include httpHandler
+            include activationService
+            include sessionService
+            include attestationVerifier
+            include licenseStore
+            include promptPipeline
+            include proxyHttpHandler
+            include tokenValidator
+            include forwardingHandler
+            include aiModelApi
+            include teeAPIApple
+            include teeAPISGX
+            include aiModelApi
+            include appleCA
+            include intelIAS
+            description "C4 Level 3 — Component: Internal components of the CloseCode App. The License Manager is the sole owner of the TEE lifecycle and License Server handshake. AST and RAG Engines enrich prompts with code context before signing and dispatch."
+            autolayout lr 50 100
+        }
         component tui "CloseCode-App-Components" {
             include user
             include tuiRenderer
@@ -347,7 +373,7 @@ workspace "CloseCode" "C4 architecture model for CloseCode, a license-enforced A
             include appleCA
             include intelIAS
             description "C4 Level 3 — Component: Internal components of the CloseCode App. The License Manager is the sole owner of the TEE lifecycle and License Server handshake. AST and RAG Engines enrich prompts with code context before signing and dispatch."
-            autolayout lr 50 100
+            autolayout lr
         }
 
         component licenseServer "LicenseServer-Components" {
