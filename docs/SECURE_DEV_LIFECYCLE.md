@@ -13,15 +13,11 @@
 - [Phase 6 — Review and Iterate](#phase-6--review-and-iterate)
 - [Living Documents](#living-documents)
 
----
-
 ## Overview
 
 CloseCode follows a **Security Development Lifecycle (SDL)** process throughout its design and implementation. The SDL is a software engineering practice that embeds security thinking at every stage of development rather than treating it as a final audit step. This document describes the SDL process as applied to CloseCode and serves as the index connecting each phase to the corresponding design and implementation artifacts.
 
 The SDL process used here is grounded in Microsoft's SDL methodology, adapted for a research and course project context, and applied specifically to the constraints of CloseCode: a fully offline, macOS-only, TEE-backed software licensing system for a local AI coding agent.
-
----
 
 ## Why SDL for CloseCode
 
@@ -33,8 +29,6 @@ The instructions for this project explicitly require the design to account for:
 - Microarchitectural threats: shared resource leakage, speculative execution effects, and software fault injection attacks such as Rowhammer
 
 Addressing these threats systematically — rather than reactively — requires a structured process. The SDL provides that structure.
-
----
 
 ## The SDL Loop
 
@@ -59,84 +53,42 @@ The SDL is not a waterfall. Each phase feeds back into the previous ones as new 
 └─────────────────────────────────────────────────────────────┘
 ```
 
----
-
 ## Phase 1 — Define Assets
 
 **Goal:** be explicit about what is worth protecting before deciding how to protect it.
 
 An asset is anything whose confidentiality, integrity, or availability matters to the security of the system. Assets are the input to the attacker model and the threat model — without a clear asset list, it is impossible to reason about what the attacker is trying to reach.
 
-For CloseCode, assets fall into two categories:
-
-**Functional assets** — things that represent the value the system delivers and that should only be accessible to paying users:
-- The AST engine and RAG pipeline functionality (the proprietary capability being licensed)
-- Prompt content submitted by the user at runtime
-
-**Security mechanism assets** — things that the license enforcement machinery depends on:
-- The device private key held in the Secure Enclave
-- The license token stored on disk (proof of activation)
-- The license checking code path itself (the gate in front of the functional assets)
-
-The license checking code path is as much an asset as the license data it protects. An attacker who cannot forge a valid license token may still bypass enforcement entirely by subverting the mechanism that checks it.
-
 **Artifact:** `docs/THREAT_MODEL.md` — Assets section
-
----
 
 ## Phase 2 — Define the Attacker Model
 
 **Goal:** scope the attacker's capabilities deliberately so that design effort is concentrated where it matters.
 
-The attacker model answers: who is the attacker, what can they do, and what is out of scope? For CloseCode, the attacker is the user themselves — someone who has purchased a license (or not) and wants to use the application beyond their entitlement. They have physical access to their own machine and root privileges.
+The attacker model answers:
 
-CloseCode uses a **two-tier attacker model**:
+- who is the attacker?,
+- depending on who the attacker, what is their motivation?,
+- what can they do skill and permissions-wise?, and
+- what they can't do?
+
+One attacker modeling approach is a **two-tier attacker model**:
 
 **Tier 1 — The Realistic Attacker (primary design target)**
 
-This is the attacker whose capabilities the system is designed to fully mitigate. They represent the realistic threat profile for a software licensing system targeting motivated but non-specialist users.
-
-Capabilities:
-- Root access to their own Mac
-- Standard reverse engineering tools: `lldb`, Hopper, class-dump, Frida
-- Ability to copy files, read normal-world process memory, and modify the filesystem
-- Ability to run instrumentation against a running process
-- System Integrity Protection (SIP) is **enabled** — they have not rebooted into recovery mode
-
-Cannot do:
-- Disable SIP (requires deliberate physical intervention: reboot into recovery mode and run `csrutil disable`)
-- Extract private keys directly from the Secure Enclave hardware
-- Break standard cryptographic primitives (SHA-256, HMAC-SHA256, P-256 ECDSA)
-- Compromise the macOS Secure Enclave firmware or the Apple attestation root
+This is the attacker whose capabilities the system is designed to fully mitigate. They represent the realistic threat profile targeting the system motivated but non-specialist users.
 
 **Tier 2 — The Advanced Attacker (document, partially mitigate)**
 
-This is the attacker whose capabilities exceed what CloseCode fully defends against. The design raises the cost of their attacks but accepts residual risk.
-
-Additional capabilities beyond Tier 1:
-- Has disabled SIP: can modify system frameworks, inject into Hardened Runtime processes
-- Can use Frida unrestricted against system-level targets
-- Can perform cache timing side-channel attacks (Flush+Reload, Prime+Probe) against normal-world code
-- Can attempt Rowhammer-style fault injection against normal-world memory
-
-Still cannot:
-- Physically decap or perform invasive probing of the Secure Enclave chip
-- Break cryptographic primitives
-
-**Out of scope entirely:**
-- Physical invasive attacks on Secure Enclave hardware
-- Compromise of macOS, CryptoKit, or Security.framework itself
-- Compiler or toolchain supply chain attacks
+This is the attacker whose capabilities exceed what the system can fully defend against. The design raises the cost of their attacks but accepts residual risk.
 
 **Artifact:** `docs/THREAT_MODEL.md` — Attacker Model section
-
----
 
 ## Phase 3 — Threat Model the Application
 
 **Goal:** systematically enumerate threats against the actual application flow, grounded in the asset list and attacker model.
 
-Threat modeling is performed against the **application data flow**, not against an abstract architecture. For each step in the CloseCode runtime flow, the threat model asks what a Tier 1 or Tier 2 attacker can do at that step using the threat categories required by the project:
+Threat modeling is performed against the **application data flow**, not against an abstract architecture. For each step in the data flow, the threat model asks what the identified attacker(s) can do at that step using the threat categories required by the project:
 
 **Software threats:**
 - Memory corruption — can the attacker corrupt the license check result in memory before it is acted on?
@@ -154,8 +106,6 @@ The threat model uses **STRIDE** categories (Spoofing, Tampering, Repudiation, I
 
 **Artifact:** `docs/THREAT_MODEL.md` — STRIDE Threat Analysis section
 
----
-
 ## Phase 4 — Design Mitigations Into the Architecture
 
 **Goal:** every architectural decision maps to a specific threat it responds to.
@@ -164,17 +114,7 @@ Mitigations are designed into the architecture in response to the threat model o
 
 Architecture Decision Records (ADRs) in `docs/adr/` capture decisions at this phase. Each ADR states the threat context that motivated the decision, the options considered, the decision made, and the residual risk accepted.
 
-Key architectural decisions for CloseCode at this phase include:
-- Platform choice (macOS + Apple Silicon only)
-- Language choice (Swift single binary)
-- TEE integration approach (direct CryptoKit calls, no ABI shim)
-- License token format and storage location
-- License gate architecture (where in the call graph the check sits)
-- Anti-reversing and binary hardening approach
-
 **Artifact:** `docs/adr/` — Architecture Decision Records, `docs/architecture/` — C4 model
-
----
 
 ## Phase 5 — Implementation Analysis
 
@@ -192,8 +132,6 @@ Implementation findings that reveal new threats or invalidate design assumptions
 
 **Artifact:** inline code comments referencing threat model entries, implementation notes in `docs/`
 
----
-
 ## Phase 6 — Review and Iterate
 
 **Goal:** close the loop between design intent and implementation reality.
@@ -208,8 +146,6 @@ At each project milestone, a structured review asks:
 Findings from this review update the threat model and may trigger new ADRs. The process is explicitly iterative — the threat model at the end of the project should reflect the system as built, not the system as originally imagined.
 
 **Artifact:** updated `docs/THREAT_MODEL.md`, new ADRs if architectural decisions change
-
----
 
 ## Living Documents
 
