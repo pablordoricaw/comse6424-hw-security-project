@@ -2,6 +2,13 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
+# Config — edit these to match your project
+# ---------------------------------------------------------------------------
+SESSION_NAME="hw-sec-project"
+WINDOW_1="window-1"
+WINDOW_2="window-2"
+
+# ---------------------------------------------------------------------------
 # Colors
 # ---------------------------------------------------------------------------
 RED='\033[0;31m'
@@ -16,12 +23,12 @@ Usage: $0 [SESSION_NAME]
 
 Description:
   Creates a new tmux session with a predefined window layout for development.
-  The session is created with two named windows (window-1, window-2) and
+  The session is created with two named windows (${WINDOW_1}, ${WINDOW_2}) and
   automatically attaches to it.
 
 Arguments:
   SESSION_NAME  (optional) Name for the tmux session.
-                Defaults to 'name-me' if not provided.
+                Defaults to '${SESSION_NAME}' if not provided.
 
 Options:
   -h, --help    Show this help message and exit.
@@ -57,16 +64,16 @@ fi
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-SESSION="${1:-'name-me'}"
+SESSION="${1:-${SESSION_NAME}}"
 
 set_tmux_session() {
-    tmux new-session -d -s "$SESSION" -n window-1
-    tmux new-window  -t "$SESSION" \; rename-window window-2
+    tmux new-session -d -s "$SESSION" -n "$WINDOW_1"
+    tmux new-window  -t "$SESSION" \; rename-window "$WINDOW_2"
 
-    tmux select-window -t window-1
+    tmux select-window -t "$SESSION:$WINDOW_1"
 
     tmux attach-session -t "$SESSION"
-    tmux select-window -t "$SESSION:window-1"
+    tmux select-window -t "$SESSION:$WINDOW_1"
 }
 
 if [[ -n "${TMUX:-}" ]]; then
