@@ -1,9 +1,6 @@
-# Threat Model
+# Threat Model <!-- omit from toc -->
 
-**Team:** Null and Void
-**Status:** Draft
-**Last Updated:** 2026-04-20
-
+## Table of Contents <!-- omit from toc -->
 
 ## 1. System Overview
 
@@ -14,10 +11,8 @@ It is a macOS with Apple Silicon-only application because it requires Apple Sili
 The license and security mitigations are designed to hinder a root-capable attacker with a valid license to run the application. The system is not intended to protect against compromise of
 vendor Secure Enclave firmware.
 
-## 2. Architecture and Trust Boundaries
-
-Refer to [./architecture/README.md](./architecture/README.md) for deep dive into the architecture design of CloseCode.
-
+> [!IMPORTANT]
+> Refer to [./architecture/README.md](./architecture/README.md) for deep dive into the architecture design of CloseCode.
 
 ## 2. Assets
 
