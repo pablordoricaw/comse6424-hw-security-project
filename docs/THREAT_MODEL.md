@@ -40,6 +40,66 @@ These are the assets the license enforcement mechanism depends on. The compromis
 
 ## 3. Attacker Model
 
+I've modeled two personas who would be motivated to attack CloseCode. They share a common permission
+baseline: they hold a valid license for a single device and have root access to their macOS machine.
+Neither can tamper with Secure Enclave hardware or its firmware.
+
+### Motivated Competitor (primary design target)
+
+**Profile:** A developer building a competing AI coding agent who has legitimately purchased
+a CloseCode license to study the product.
+
+**Motivation:** Extract or replicate CloseCode's proprietary prompt-enrichment logic to
+incorporate it into their own product.
+
+**Capabilities:**
+- Root access on the licensed machine
+- General software development skills, including use of AI-assisted tooling
+- Can inspect running process state using standard developer tools (Xcode Instruments,
+  `lldb`, `dtrace`)
+- Can observe filesystem and Keychain layout
+- Can attempt to copy or transfer license artifacts to another machine
+
+**Limits:**
+- Cannot perform static binary analysis or disassemble compiled binaries
+- Cannot perform dynamic binary instrumentation (no Frida, no manual hook injection)
+- Cannot exploit microarchitectural side channels
+- Cannot modify signed binaries without triggering Gatekeeper/codesign validation failures
+
+**Design target:** The system must fully mitigate all attacks within this persona's capability
+envelope. This is the realistic threat profile: motivated, resourceful, but not a security
+specialist.
+
+### Security Researcher (document and partially mitigate)
+
+**Profile:** A security researcher who has acquired a CloseCode license and is actively
+probing the system for vulnerabilities with the intention of either for responsible disclosure,
+academic publication, or competitive intelligence.
+
+**Motivation:** Discover bypassable license controls, extract key material, or demonstrate
+that the proprietary functionality is reachable without a valid license.
+
+**Capabilities:**
+- Everything in the Motivated Competitor, plus:
+- Static binary analysis and disassembly (`otool`, `Hopper`, `Ghidra`, IDA Pro)
+- Dynamic binary instrumentation (Frida, `lldb` scripting, custom dylib injection)
+- Memory forensics (heap inspection, `/proc`-equivalent tools, core dumps)
+- Microarchitectural side-channel attacks (cache timing, speculative execution leakage)
+- SIP disabled on the target machine (enables unsigned kernel extensions, unrestricted
+  `dtrace`, direct memory access)
+- Control flow manipulation (NOP patching, return address overwrite, `DYLD_INSERT_LIBRARIES`
+  with SIP off)
+
+**Limits:**
+- Cannot break Secure Enclave cryptographic guarantees (no known attack on SE hardware)
+- Cannot forge a valid CryptoKit signature without access to the SE-bound private key
+- Cannot compromise the vendor Secure Enclave firmware (explicitly out of scope per
+  Section 1)
+- Assumed to have no persistent kernel exploit (e.g., no jailbreak-equivalent for macOS)
+
+**Design target:** The system documents known attack paths within this persona's capability
+envelope and implements mitigations where feasible. Residual risks are accepted and
+recorded in the threat model.
 
 ## 4. STRIDE Threat Analysis
 
