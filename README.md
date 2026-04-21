@@ -11,7 +11,7 @@
 </p>
 
 > CloseCode is a final project for the **COMSE-6424 Hardware Security** course at Columbia University,
-> built under the *Software License Server Immune to Software and Microarchitectural Attack* project option.
+> built under the *Licensed Software Application Immune to Software and Microarchitectural Attack* project option.
 > Unlike OpenCode, this one will cost you — and it *knows* if you haven't paid.
 
 - **Team:** Null and Void
