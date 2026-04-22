@@ -61,7 +61,7 @@ An asset is anything whose confidentiality, integrity, or availability matters t
 
 **Artifact:** `docs/THREAT_MODEL.md` — Assets section
 
-## Phase 2 — Define the Attacker Model
+## Phase 2: Define the Attacker Model
 
 **Goal:** scope the attacker's capabilities deliberately so that design effort is concentrated where it matters.
 
@@ -84,29 +84,29 @@ This is the attacker whose capabilities exceed what the system can fully defend 
 
 **Artifact:** `docs/THREAT_MODEL.md` — Attacker Model section
 
-## Phase 3 — Threat Model the Application
+## Phase 3: Threat Model the Application
 
 **Goal:** systematically enumerate threats against the actual application flow, grounded in the asset list and attacker model.
 
 Threat modeling is performed against the **application data flow**, not against an abstract architecture. For each step in the data flow, the threat model asks what the identified attacker(s) can do at that step using the threat categories required by the project:
 
 **Software threats:**
-- Memory corruption — can the attacker corrupt the license check result in memory before it is acted on?
-- Control flow attacks — can the attacker redirect execution to skip the license gate?
-- Unsafe parsing or serialization — can a malformed license token pass validation due to a parsing bug?
-- Privilege misuse — can the attacker abuse macOS APIs or entitlements the app holds?
-- Implementation bugs — are there logic errors in the license check that can be exploited?
+- Memory corruption: can the attacker corrupt the license check result in memory before it is acted on?
+- Control flow attacks: can the attacker redirect execution to skip the license gate?
+- Unsafe parsing or serialization: can a malformed license token pass validation due to a parsing bug?
+- Privilege misuse: can the attacker abuse macOS APIs or entitlements the app holds?
+- Implementation bugs: are there logic errors in the license check that can be exploited?
 
 **Microarchitectural threats:**
-- Shared resource leakage — can the attacker observe license check state or AST/RAG content via cache timing?
-- Speculative execution effects — can speculative execution expose gated functionality to an attacker observing microarchitectural side channels?
-- Software fault injection (Rowhammer) — can the attacker flip bits in the license check result or license token in memory?
+- Shared resource leakage: can the attacker observe license check state or AST/RAG content via cache timing?
+- Speculative execution effects: can speculative execution expose gated functionality to an attacker observing microarchitectural side channels?
+- Software fault injection (Rowhammer): can the attacker flip bits in the license check result or license token in memory?
 
 The threat model uses **STRIDE** categories (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege) to organise findings, with each threat tagged by severity and mitigation status.
 
-**Artifact:** `docs/THREAT_MODEL.md` — STRIDE Threat Analysis section
+**Artifact:** `docs/THREAT_MODEL.md` STRIDE Threat Analysis section
 
-## Phase 4 — Design Mitigations Into the Architecture
+## Phase 4: Design Mitigations Into the Architecture
 
 **Goal:** every architectural decision maps to a specific threat it responds to.
 
@@ -114,9 +114,12 @@ Mitigations are designed into the architecture in response to the threat model o
 
 Architecture Decision Records (ADRs) in `docs/adr/` capture decisions at this phase. Each ADR states the threat context that motivated the decision, the options considered, the decision made, and the residual risk accepted.
 
-**Artifact:** `docs/adr/` — Architecture Decision Records, `docs/architecture/` — C4 model
+**Artifacts:**
 
-## Phase 5 — Implementation Analysis
+- `docs/adr/`: Architecture Decision Records,
+- `docs/architecture/`: C4 model-as-code.
+
+## Phase 5: Implementation Analysis
 
 **Goal:** verify that the implementation realises the security properties assumed in the design, and identify gaps introduced by implementation choices.
 
@@ -132,7 +135,7 @@ Implementation findings that reveal new threats or invalidate design assumptions
 
 **Artifact:** inline code comments referencing threat model entries, implementation notes in `docs/`
 
-## Phase 6 — Review and Iterate
+## Phase 6: Review and Iterate
 
 **Goal:** close the loop between design intent and implementation reality.
 
