@@ -16,21 +16,14 @@ I modeled the architecture of CloseCode down to the Component level of the C4 mo
 
 First off is the Context level diagram.
 
-<img src="../figs/c4-context-view.png" width="1200">
+<img src="./figs/c4-context-diagram.png" width="1200">
 
 ### Level: Container Diagram
 
-<img src="../figs/c4-container-view.png" width="1200">
+<img src="./figs/c4-container-diagram.png" width="1200">
 
-### Level: Component Diagrams
+### Level: Component Diagram
 
-#### ClodeCode App Component Diagram
+<img src="./figs/c4-component-diagram.png" width="1200">
 
-<img src="../figs/c4-component-view-closecode-app.png" width="1200">
-
-## Trust Boundary Summary
-
-| Component | Trust Level | Notes |
-| :--- | :--- | :--- |
-
-### Trust Boundary Notes
+### Data Flow
