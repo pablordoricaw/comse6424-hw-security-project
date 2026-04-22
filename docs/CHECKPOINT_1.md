@@ -1,4 +1,4 @@
-# Checkpoint 1: CloseCode — Licensed Software Application Immune to Software and Microarchitectural Attacks <!-- omit from toc -->
+# Checkpoint 1: CloseCode a Licensed Software Application Immune to Software and Microarchitectural Attacks <!-- omit from toc -->
 
 > [!NOTE]
 > Renamed the project type from _Software License Server Immune to Software and Microarchitectural Attacks_ to _Licensed Software Application Immune to Software and Microarchitectural Attacks_ to avoid generating confusion due to the ubiquity of web client-server applications since CloseCode is purely an application.
@@ -38,7 +38,7 @@ The core idea behind CloseCode is to avoid any dependence on an always-online li
 >
 > The architecture model is defined as code in [docs/architecture/workspace.dsl](./architecture/workspace.dsl) using the DSL of the [Structurizr](https://docs.structurizr.com/) and diagrams were generated using the [Structurizr Playground](https://playground.structurizr.com/)
 
-I modeled the architecture of CloseCode down to the Component level of the C4 model for which the next sections have the corresponding diagrams.
+This section contains the C4 model diagrams of the architecture of CloseCode down to the Component level of the C4 model for which the next sections have the corresponding diagrams.
 
 ### Level: Context Diagram
 
@@ -121,7 +121,7 @@ These are the assets the license enforcement mechanism depends on. The compromis
 
 ### Attacker Model
 
-I've modeled two personas who would be motivated to attack CloseCode. They share a common permission
+Modeled two personas who would be motivated to attack CloseCode. They share a common permission
 baseline: they hold a valid license for a single device and have root access to their macOS machine.
 Neither can tamper with Secure Enclave hardware or its firmware.
 
