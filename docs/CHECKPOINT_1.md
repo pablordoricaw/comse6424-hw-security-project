@@ -62,20 +62,22 @@ To understand how the components interact securely, the architecture must be vie
 
 When the user launches CloseCode for the first time, the application must cryptographically bind the provided license to the specific macOS hardware.
 
-1. **Input:** The user provides a "vendor"-signed `License Certificate` (which contains the proprietary `Master_AES_Key` in plaintext).
-2. **Hardware Binding:** The License Gate validates the vendor signature. If valid, it instructs the Secure Enclave Module to generate a new, non-exportable hardware Key Pair.
-3. **Key Wrapping:** The License Gate uses the Secure Enclave's newly generated Public Key to encrypt (wrap) the `Master_AES_Key`. This creates the `Wrapped_AES_Key`.
-4. **Storage:** The License Gate securely deletes the plaintext `License Certificate` from memory. It constructs a local `License Token` containing the `Wrapped_AES_Key` and passes it to the Keychain Adapter, which stores it in the macOS Keychain under strict Code Signature access controls (`kSecAccessControl`).
+1. **Input:** The user provides a "vendor"-signed `License Certificate` (which contains the proprietary `Master_AES_Key`, the `expiration_date`, and the `device_fingerprint` in plaintext).
+2. **Device Fingerprint Verification:** The License Gate reads the local IOPlatformUUID via `IOKit` and compares it against the `device_fingerprint` embedded in the `License Certificate`. If they do not match, activation is immediately rejected and the plaintext `License Cerfificate` is zeroized from memory. The user is notified that the license was issued for a different device.
+3. **Hardware Binding:** The License Gate validates the vendor signature. If valid, it instructs the Secure Enclave Module to generate a new, non-exportable hardware Key Pair.
+4. **Key Wrapping:** The License Gate uses the Secure Enclave's newly generated Public Key to encrypt (wrap) the `Master_AES_Key`. This creates the `Wrapped_AES_Key`.
+5. **Storage:** The License Gate securely deletes the plaintext `License Certificate` from memory. It constructs a local `License Token` containing the `Wrapped_AES_Key` and the `device_fingerprint`, and passes it to the Keychain Adapter, which stores it in the macOS Keychain under strict Code Signature access controls (`kSecAccessControl`).
 
 #### 2. Use Flow (Daily Execution)
 
 On subsequent launches, the application must securely unwrap the key to unlock the proprietary engines.
 
 1. **Retrieval:** The TUI Renderer triggers the startup sequence. The License Gate asks the Keychain Adapter to retrieve the `License Token`.
-2. **Hardware Unwrapping:** The License Gate extracts the `Wrapped_AES_Key` and passes it to the Secure Enclave Module. The Secure Enclave uses its burned-in Private Key to decrypt the payload, returning the plaintext `Master_AES_Key` to the License Gate in memory.
-3. **Engine Initialization:** The License Gate passes the `Master_AES_Key` to the AST and RAG Engines. The engines use this key to decrypt their proprietary rulesets and embeddings from the local filesystem into RAM.
-4. **Prompt Processing:** As the user types, the Prompt Pipeline queries the unlocked AST and RAG engines to build the `Enriched Prompt`.
-5. **Inference:** The `Enriched Prompt` is passed via an in-memory Swift function call to the Embedded Inference Engine (MLX), which executes the LLM locally and streams the text response back to the TUI Renderer.
+2. **Device Fingerprint Verification:** The License Gate reads the local IOPlatformUUID via `IOKit` and compares it against the `device_fingerprint` embedded in the `License Certificate`. The `License Token`s cryptographic signature is also verified to ensure the fingerprint has not been tampered with. If either check fails, the flow stops immediately before any cryptographic operations are attempted.
+3. **Hardware Unwrapping:** The License Gate extracts the `Wrapped_AES_Key` and passes it to the Secure Enclave Module. The Secure Enclave uses its burned-in Private Key to decrypt the payload, returning the plaintext `Master_AES_Key` to the License Gate in memory.
+4. **Engine Initialization:** The License Gate passes the `Master_AES_Key` to the AST and RAG Engines. The engines use this key to decrypt their proprietary rulesets and embeddings from the local filesystem into RAM.
+5. **Prompt Processing:** As the user types, the Prompt Pipeline queries the unlocked AST and RAG engines to build the `Enriched Prompt`.
+6. **Inference:** The `Enriched Prompt` is passed via an in-memory Swift function call to the Embedded Inference Engine (MLX), which executes the LLM locally and streams the text response back to the TUI Renderer.
 
 When the application exits or the session is terminated, CloseCode must ensure no cryptographic material or proprietary logic is left exposed.
 
@@ -409,11 +411,12 @@ Elevation-of-privilege threats ask whether an attacker can gain access to functi
 
 In summary the explicitly accepted residual risk from meeting the requirement of a fully offline architecture and acceptable application performance is the following:
 
-#### Pre-Activation License Sharing (Lack of Central Ledger)
+#### Pre-Activation License Sharing (Tier 2 Residual)
 
-Because CloseCode operates fully offline without a License Server, there is no central authority to record when a license has been consumed.
-*   **The Risk:** If a legitimate purchaser shares their License Certificate with a second user, both users can independently activate the software on their respective machines. Both machines will generate valid, hardware-bound tokens for their own Secure Enclaves.
-*   **Acceptance Rationale:** This is an unavoidable consequence of a fully offline activation model. However, once activated on a machine, the resulting License Token cannot be transferred to a third machine, satisfying the node-locked requirement.
+CloseCode licenses are cryptographically bound to a MacBook's IOPlatformUUID at the time of purchase. The vendor embeds the expected fingerprint inside the signed `License Certificate`, preventing tampering. At activation and on every subsequent launch, the License Gate reads the local IOPlatformUUID via `IOKit` and verifies it against the value in the signed token before any cryptographic operations are attempted.
+
+*   **The Risk:** A Security Researcher attacker with SIP disabled can use dynamic binary instrumentation (e.g., Frida or a custom `DYLD_INSERT_LIBRARIES` hook) to intercept and spoof the `IOKit` call that reads the device's IOPlatformUUID, returning an arbitrary value to the License Gate. This would allow a license issued for Device A to activate on Device B.
+*   **Acceptance Rationale:** The IOPlatformUUID binding fully mitigates the pre-activation sharing attack against Tier 1 (Motivated Competitor) attackers, who lack the binary instrumentation capability required to spoof `IOKit` calls. For Tier 2 (Security Researcher) attackers, this is a partial mitigation: the binding raises the bar from trivially sharing a `License Certificate` to requiring active runtime hooking of a system framework. This residual is consistent with the broader accepted risk that a Tier 2 attacker with SIP disabled can pierce the OS-Application boundary (TB1) through dynamic instrumentation.
 
 #### Post-Unlock Memory Extraction (Tier 2 Capability)
 
