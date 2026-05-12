@@ -14,17 +14,25 @@ let package = Package(
             name: "CloseCode",
             dependencies: [
                 "TUIkit",
-                "SecureEnclave"
+                "LicenseGate"
             ]
         ),
         .target(
-            name: "SecureEnclave",
-            path: "Sources/SecureEnclave"
+            name: "LicenseGate",
+            path: "Sources/LicenseGate",
+            linkerSettings: [
+                .linkedFramework("IOKit")
+            ]
         ),
         .testTarget(
             name: "LicenseTests",
-            dependencies: ["SecureEnclave"],
-            path: "Tests/LicenseTests"
+            dependencies: [
+                "LicenseGate"
+            ],
+            path: "Tests/LicenseTests",
+            linkerSettings: [
+                .linkedFramework("IOKit")
+            ]
         ),
     ],
     swiftLanguageModes: [.v6]

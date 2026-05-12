@@ -1,21 +1,22 @@
 import Testing
 import CryptoKit
 import Foundation
-@testable import SecureEnclave
+@testable import LicenseGate
 
 @Suite("SecureEnclaveModule", .serialized)
 struct SecureEnclaveModuleTests {
 
+    private let se = SecureEnclaveModule()
+
+    init() {
+        try? se.deleteKey()
+    }
     // The same tag the module uses internally — needed for Keychain cleanup.
     private let keyTag = "com.closecode.secureenclave.licensekey"
 
     // Removes the SE key from the Keychain after each test so tests are isolated.
     private func cleanup() {
-        let query: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrAccount as String: keyTag
-        ]
-        SecItemDelete(query as CFDictionary)
+        try? se.deleteKey()
     }
 
     @Test("generateAndStoreKeyPair returns a valid P-256 public key")

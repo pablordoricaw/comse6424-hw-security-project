@@ -9,6 +9,10 @@ protocol SecureEnclaveModuleProtocol {
     /// Call only once at activation — subsequent launches use `loadPublicKey()`.
     func generateAndStoreKeyPair() throws -> P256.KeyAgreement.PublicKey
 
+    /// Deletes the SE key pair associated with this module.
+    /// Used during test teardown and re-activation flows.
+    func deleteKey() throws
+
     /// Loads the public key from the stored SE private key reference.
     /// Throws `SecureEnclaveModuleError.keyNotFound` if activation has not occurred.
     func loadPublicKey() throws -> P256.KeyAgreement.PublicKey
@@ -25,6 +29,7 @@ protocol SecureEnclaveModuleProtocol {
 enum SecureEnclaveModuleError: Error, LocalizedError, Equatable {
     case secureEnclaveUnavailable
     case keyGenerationFailed(underlying: Error)
+    case keyDeletionFailed(status: OSStatus)
     case keyLoadFailed(underlying: Error)
     case keyNotFound
     case wrapFailed(underlying: Error)
@@ -36,6 +41,8 @@ enum SecureEnclaveModuleError: Error, LocalizedError, Equatable {
             return "This device does not have a Secure Enclave."
         case .keyGenerationFailed(let e):
             return "Secure Enclave key generation failed: \(e.localizedDescription)"
+        case .keyDeletionFailed(let status):
+            return "Secure Enclave key deletion failed: \(status)"
         case .keyLoadFailed(let e):
             return "Secure Enclave key load failed: \(e.localizedDescription)"
         case .keyNotFound:
@@ -51,6 +58,7 @@ enum SecureEnclaveModuleError: Error, LocalizedError, Equatable {
             switch (lhs, rhs) {
                     case (.secureEnclaveUnavailable, .secureEnclaveUnavailable): return true
                     case (.keyGenerationFailed, .keyGenerationFailed):           return true
+                    case (.keyDeletionFailed(let a), .keyDeletionFailed(let b)): return a == b
                     case (.keyLoadFailed, .keyLoadFailed):                       return true
                     case (.keyNotFound, .keyNotFound):                           return true
                     case (.wrapFailed, .wrapFailed):                             return true
@@ -94,6 +102,17 @@ final class SecureEnclaveModule: SecureEnclaveModuleProtocol {
             throw e
         } catch {
             throw SecureEnclaveModuleError.keyGenerationFailed(underlying: error)
+        }
+    }
+
+    func deleteKey() throws {
+        let query: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrAccount as String: keyTag
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw SecureEnclaveModuleError.keyDeletionFailed(status: status)
         }
     }
 
