@@ -99,15 +99,19 @@ struct LicenseGateTests {
     @Test("activate overwrites an existing token on re-activation")
     func activateOverwritesExistingToken() throws {
         defer { cleanup() }
-
+ 
         let first = try makeCertificate(expirationDate: Date(timeIntervalSinceNow: 86400))
         try gate.activate(with: first)
-
-        // Simulate re-activation — SE key must be cleared first.
+ 
+        // Fresh SE instance for re-activation — mirrors what actually happens on relaunch.
         try se.deleteKey()
+        let reactivationGate = LicenseGate(
+            keychainAdapter: keychain,
+            secureEnclaveModule: SecureEnclaveModule(keyTag: "com.closecode.secureenclave.licensekey.test.gate")
+        )
         let second = try makeCertificate(expirationDate: Date(timeIntervalSinceNow: 86400 * 60))
-        try gate.activate(with: second)
-
+        try reactivationGate.activate(with: second)
+ 
         let token = try keychain.load()
         #expect(token.expirationDate == second.expirationDate)
     }
@@ -189,10 +193,13 @@ struct LicenseGateTests {
         let certificate = try makeCertificate(masterAESKey: masterKey)
         try gate.activate(with: certificate)
 
+        let storedToken = try keychain.load()
+        #expect(storedToken.deviceFingerprint == currentUUID())
+
         // Second gate instance sharing the same Keychain and SE key — use flow (relaunch).
         let relaunchedGate = LicenseGate(
-            keychainAdapter: KeychainAdapter(),
-            secureEnclaveModule: SecureEnclaveModule()
+            keychainAdapter: KeychainAdapter(tokenTag: "com.closecode.licensegate.token.test.gate"),
+            secureEnclaveModule: SecureEnclaveModule(keyTag: "com.closecode.secureenclave.licensekey.test.gate")
         )
         let unlocked = try relaunchedGate.unlock()
 

@@ -5,7 +5,7 @@ import Foundation
 @Suite("KeychainAdapter", .serialized)
 struct KeychainAdapterTests {
 
-    private let adapter = KeychainAdapter()
+    private let adapter = KeychainAdapter(tokenTag: "com.closecode.licensegate.token.test.keychain")
 
     init() {
         // Wipe any state left by a previous interrupted test run.
@@ -19,7 +19,6 @@ struct KeychainAdapterTests {
     @Test("store persists a token that load can retrieve")
     func storeAndLoad() throws {
         defer { cleanup() }
-        let adapter = KeychainAdapter()
         let token = makeToken()
 
         try adapter.store(token)
@@ -33,7 +32,6 @@ struct KeychainAdapterTests {
     @Test("store overwrites an existing token on re-activation")
     func storeOverwritesExisting() throws {
         defer { cleanup() }
-        let adapter = KeychainAdapter()
         let first = makeToken(fingerprint: "DEVICE-AAA")
         let second = makeToken(fingerprint: "DEVICE-BBB")
 
@@ -48,7 +46,6 @@ struct KeychainAdapterTests {
     func loadThrowsWhenNoToken() throws {
         defer { cleanup() }
         cleanup() // Ensure clean slate explicitly.
-        let adapter = KeychainAdapter()
 
         #expect(throws: KeychainAdapterError.tokenNotFound) {
             try adapter.load()
@@ -58,7 +55,6 @@ struct KeychainAdapterTests {
     @Test("load round-trips wrappedAESKey bytes exactly")
     func loadRoundTripsWrappedKey() throws {
         defer { cleanup() }
-        let adapter = KeychainAdapter()
         let keyBytes = Data((0..<64).map { _ in UInt8.random(in: 0...255) })
         let token = makeToken(wrappedAESKey: keyBytes)
 
@@ -71,7 +67,6 @@ struct KeychainAdapterTests {
     @Test("load round-trips expirationDate with sub-second precision")
     func loadRoundTripsExpirationDate() throws {
         defer { cleanup() }
-        let adapter = KeychainAdapter()
         // JSONEncoder encodes Date as a Double (TimeInterval) — sub-second precision is preserved.
         let date = Date(timeIntervalSinceReferenceDate: 1_000_000.123456)
         let token = makeToken(expirationDate: date)
@@ -85,7 +80,6 @@ struct KeychainAdapterTests {
     @Test("delete removes the token so load throws tokenNotFound")
     func deleteRemovesToken() throws {
         defer { cleanup() }
-        let adapter = KeychainAdapter()
         try adapter.store(makeToken())
         try adapter.delete()
 
@@ -98,7 +92,6 @@ struct KeychainAdapterTests {
     func deleteIsIdempotent() throws {
         defer { cleanup() }
         cleanup() // Ensure nothing is stored.
-        let adapter = KeychainAdapter()
 
         // Calling delete when nothing exists must be a silent no-op.
         #expect(throws: Never.self) {

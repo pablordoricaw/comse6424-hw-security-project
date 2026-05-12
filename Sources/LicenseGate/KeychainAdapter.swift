@@ -59,9 +59,13 @@ protocol KeychainAdapterProtocol {
 
 final class KeychainAdapter: KeychainAdapterProtocol {
 
-    private let tokenTag = "com.closecode.licensegate.token"
+    private let tokenTag: String
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+
+    init (tokenTag: String = "com.closecode.licensegate.token") {
+        self.tokenTag = tokenTag
+    }
 
     func store(_ token: LicenseToken) throws {
         let data: Data

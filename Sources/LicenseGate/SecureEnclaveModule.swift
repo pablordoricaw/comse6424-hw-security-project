@@ -73,7 +73,7 @@ enum SecureEnclaveModuleError: Error, LocalizedError, Equatable {
 final class SecureEnclaveModule: SecureEnclaveModuleProtocol {
 
     // The tag used to persist and retrieve the SE private key reference.
-    private let keyTag = "com.closecode.secureenclave.licensekey"
+    private let keyTag: String
 
     // HPKE suite: P-256 KEM, HKDF-SHA256, AES-128-GCM.
     // This is a well-established, CryptoKit-native suite compatible with SE keys.
@@ -87,6 +87,10 @@ final class SecureEnclaveModule: SecureEnclaveModuleProtocol {
     // from being replayed across different app contexts.
     private let hpkeInfo = Data("com.closecode.licensegate.wrap".utf8)
     private let hpkeAAD  = Data("com.closecode.licensegate.aad".utf8)
+
+    init(keyTag: String = "com.closecode.secureenclave.licensekey") {
+        self.keyTag = keyTag
+    }
 
     func generateAndStoreKeyPair() throws -> P256.KeyAgreement.PublicKey {
         guard SecureEnclave.isAvailable else {
@@ -174,15 +178,20 @@ final class SecureEnclaveModule: SecureEnclaveModuleProtocol {
     // This is NOT the raw private key bytes — it is a handle that lets CryptoKit
     // re-attach to the SE-resident key on future launches.
     private func storeKeyData(_ data: Data) throws {
-        let query: [String: Any] = [
+        // Delete with a minimal query — kSecAttrAccessible is not valid on delete.
+        let deleteQuery: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrAccount as String: keyTag
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+ 
+        let addQuery: [String: Any] = [
             kSecClass as String:           kSecClassGenericPassword,
             kSecAttrAccount as String:     keyTag,
             kSecAttrAccessible as String:  kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecValueData as String:       data
         ]
-        // Delete any existing entry before writing (handles re-activation).
-        SecItemDelete(query as CFDictionary)
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
         guard status == errSecSuccess else {
             throw SecureEnclaveModuleError.keyGenerationFailed(
                 underlying: NSError(domain: NSOSStatusErrorDomain, code: Int(status))

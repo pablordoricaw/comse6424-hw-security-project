@@ -6,23 +6,19 @@ import Foundation
 @Suite("SecureEnclaveModule", .serialized)
 struct SecureEnclaveModuleTests {
 
-    private let se = SecureEnclaveModule()
+    private let module = SecureEnclaveModule(keyTag: "com.closecode.secureenclave.licensekey.test.se")
 
     init() {
-        try? se.deleteKey()
+        try? module.deleteKey()
     }
-    // The same tag the module uses internally — needed for Keychain cleanup.
-    private let keyTag = "com.closecode.secureenclave.licensekey"
 
-    // Removes the SE key from the Keychain after each test so tests are isolated.
     private func cleanup() {
-        try? se.deleteKey()
+        try? module.deleteKey()
     }
 
     @Test("generateAndStoreKeyPair returns a valid P-256 public key")
     func generateAndStoreKeyPairReturnsPublicKey() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let publicKey = try module.generateAndStoreKeyPair()
         // CryptoKit rawRepresentation is the compact 64-byte format (X || Y, no 0x04 prefix).
         #expect(publicKey.rawRepresentation.count == 64)
@@ -31,7 +27,6 @@ struct SecureEnclaveModuleTests {
     @Test("generateAndStoreKeyPair persists the key so loadPublicKey succeeds")
     func generatePersistsKey() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let generated = try module.generateAndStoreKeyPair()
         let loaded = try module.loadPublicKey()
         #expect(generated.rawRepresentation == loaded.rawRepresentation)
@@ -40,7 +35,6 @@ struct SecureEnclaveModuleTests {
     @Test("generateAndStoreKeyPair called twice overwrites the old key cleanly")
     func generateTwiceOverwrites() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let first = try module.generateAndStoreKeyPair()
         let second = try module.generateAndStoreKeyPair()
         // Two SE key pairs must be distinct.
@@ -54,7 +48,6 @@ struct SecureEnclaveModuleTests {
     func loadPublicKeyThrowsWhenNoKey() throws {
         defer { cleanup() }
         cleanup() // Ensure clean slate explicitly.
-        let module = SecureEnclaveModule()
         #expect(throws: SecureEnclaveModuleError.keyNotFound) {
             try module.loadPublicKey()
         }
@@ -63,7 +56,6 @@ struct SecureEnclaveModuleTests {
     @Test("wrap produces a blob larger than the 64-byte encapsulated key")
     func wrapProducesBlob() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let publicKey = try module.generateAndStoreKeyPair()
         let masterKey = SymmetricKey(size: .bits256)
         let wrapped = try module.wrap(masterKey, using: publicKey)
@@ -75,7 +67,6 @@ struct SecureEnclaveModuleTests {
     @Test("wrap produces different ciphertexts for the same key (HPKE is non-deterministic)")
     func wrapIsNonDeterministic() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let publicKey = try module.generateAndStoreKeyPair()
         let masterKey = SymmetricKey(size: .bits256)
         let wrapped1 = try module.wrap(masterKey, using: publicKey)
@@ -87,7 +78,6 @@ struct SecureEnclaveModuleTests {
     @Test("unwrap recovers the original Master_AES_Key (round-trip)")
     func roundTrip() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let publicKey = try module.generateAndStoreKeyPair()
         let masterKey = SymmetricKey(size: .bits256)
 
@@ -102,7 +92,6 @@ struct SecureEnclaveModuleTests {
     @Test("unwrap fails when the wrapped blob is truncated")
     func unwrapFailsOnTruncatedBlob() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let publicKey = try module.generateAndStoreKeyPair()
         let masterKey = SymmetricKey(size: .bits256)
         let wrapped = try module.wrap(masterKey, using: publicKey)
@@ -116,7 +105,6 @@ struct SecureEnclaveModuleTests {
     @Test("unwrap fails when the ciphertext is corrupted")
     func unwrapFailsOnCorruptedCiphertext() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
         let publicKey = try module.generateAndStoreKeyPair()
         let masterKey = SymmetricKey(size: .bits256)
         var wrapped = try module.wrap(masterKey, using: publicKey)
@@ -129,17 +117,13 @@ struct SecureEnclaveModuleTests {
     }
 
     @Test("unwrap fails when no key is stored in the Keychain")
-    func unwrapFailsWithNoStoredKey() throws {
+    func unwrapFailsWhenNoKeyStored() throws {
         defer { cleanup() }
-        let module = SecureEnclaveModule()
-        let publicKey = try module.generateAndStoreKeyPair()
-        let masterKey = SymmetricKey(size: .bits256)
-        let wrapped = try module.wrap(masterKey, using: publicKey)
-
-        // Simulate the Keychain entry being deleted (e.g. DoS scenario).
         cleanup()
+ 
+        let fakeWrapped = Data(repeating: 0xAB, count: 128)
         #expect(throws: SecureEnclaveModuleError.keyNotFound) {
-            try module.unwrap(wrapped)
+            try module.unwrap(fakeWrapped)
         }
     }
 }
