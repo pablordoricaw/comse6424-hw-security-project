@@ -55,8 +55,8 @@ private func currentUUID() -> String {
 @Suite("LicenseGate", .serialized)
 struct LicenseGateTests {
 
-    private let keychain = KeychainAdapter()
-    private let se = SecureEnclaveModule()
+    private let keychain = KeychainAdapter(tokenTag: "com.closecode.licensegate.token.test.gate")
+    private let se = SecureEnclaveModule(keyTag: "com.closecode.secureenclave.licensekey.test.gate")
     private let gate: LicenseGate
 
     init() {
