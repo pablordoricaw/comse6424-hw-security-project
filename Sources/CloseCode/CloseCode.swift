@@ -2,24 +2,28 @@ import Foundation
 import CryptoKit
 import LicenseGate
 
+import TUI
+
 @main
 struct CloseCode {
     static func main() {
-        let args = CommandLine.arguments
+        MainActor.assumeIsolated {
+            let args = CommandLine.arguments
 
-        if args.contains("--deactivate") {
-            runDeactivation()
-        // Activation Flow: closecode --activate <cert-file>
-        } else if let activateIndex = args.firstIndex(of: "--activate") {
-            guard activateIndex + 1 < args.count else {
-                exit(withError: "Missing certificate path after --activate.")
+            if args.contains("--deactivate") {
+                runDeactivation()
+            // Activation Flow: closecode --activate <cert-file>
+            } else if let activateIndex = args.firstIndex(of: "--activate") {
+                guard activateIndex + 1 < args.count else {
+                    exit(withError: "Missing certificate path after --activate.")
+                }
+                let certPath = args[activateIndex + 1]
+                runActivation(certPath: certPath)
+
+            // Use Flow: closecode
+            } else {
+                runUseFlow()
             }
-            let certPath = args[activateIndex + 1]
-            runActivation(certPath: certPath)
-
-        // Use Flow: closecode
-        } else {
-            runUseFlow()
         }
     }
 }
@@ -51,17 +55,18 @@ private func runActivation(certPath: String) {
     }
 }
 
+@MainActor
 private func runUseFlow() {
     do {
         let gate = LicenseGate()
-        let masterKey = try gate.unlock()
+        let licenseInfo = try gate.unlock()
 
-        // let assets = try AssetStore.decrypt(using: masterKey)
-        // runTUI(assets: assets)
-        runTUI()
+        // masterAESKey scoped here — decryption happens before TUI launch (Phase 2)
+        _ = licenseInfo.masterAESKey  // TODO: pass to AssetStore.decrypt()
 
+        runTUI(licenseInfo: licenseInfo)
     } catch LicenseGateError.noLicenseToken {
-        exit(withError: "Not activated. Run: closecode --activate <certificate>")
+        exit(withError: "Not activated. Run: swift run closecode --activate <certificate>")
     } catch LicenseGateError.licenseExpired(let date) {
         let formatted = DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .none)
         exit(withError: "License expired on \(formatted). Please provide a new certificate.")
@@ -72,12 +77,11 @@ private func runUseFlow() {
     }
 }
 
-private func runTUI() {
-// private func runTUI(assets: AssetStore) {
-    // TODO: Phase 2 — pass masterKey to TUI renderer for asset decryption.
-    // For now, confirm the gate was passed successfully.
-    print("✓ License verified. Launching CloseCode...")
-    print("[TUI renderer not yet implemented — Phase 2]")
+@MainActor
+private func runTUI(licenseInfo: LicenseInfo) {
+// private func runTUI(licenseInfo: LicenseInfo, assets: AssetStore) {
+    sharedLicenseInfo = licenseInfo
+    TUIRenderer.main()
 }
 
 /// Loads a LicenseCertificate from a JSON file at the given path.

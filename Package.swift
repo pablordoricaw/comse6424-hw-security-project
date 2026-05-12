@@ -22,10 +22,18 @@ let package = Package(
         .executableTarget(
             name: "closecode",
             dependencies: [
-                "TUIkit",
+                "TUI",
                 "LicenseGate"
             ],
             path: "Sources/CloseCode",
+        ),
+        .target(
+            name: "TUI",
+            dependencies: [
+                "TUIkit",
+                "LicenseGate"
+            ],
+            path: "Sources/TUI"
         ),
         .target(
             name: "LicenseGate",

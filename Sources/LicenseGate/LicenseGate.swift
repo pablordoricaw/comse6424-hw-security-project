@@ -2,10 +2,16 @@ import Foundation
 import CryptoKit
 import IOKit
 
+public struct LicenseInfo {
+    public let masterAESKey: SymmetricKey
+    public let expirationDate: Date
+    public let deviceFingerprint: String
+}
+
 public protocol LicenseGateProtocol {
     func activate(with certificate: LicenseCertificate) throws
     func deactivate() throws
-    func unlock() throws -> SymmetricKey
+    func unlock() throws -> LicenseInfo
 }
 
 public enum LicenseGateError: Error, LocalizedError, Equatable {
@@ -114,7 +120,7 @@ public final class LicenseGate: LicenseGateProtocol {
         }
     }
 
-    public func unlock() throws -> SymmetricKey {
+    public func unlock() throws -> LicenseInfo {
         do {
             // Step 1: Retrieve the stored License Token.
             let token = try keychainAdapter.load()
@@ -126,8 +132,13 @@ public final class LicenseGate: LicenseGateProtocol {
             try verifyExpiration(of: token)
 
             // Step 4: Unwrap the Master_AES_Key via the SE private key.
-            return try secureEnclaveModule.unwrap(token.wrappedAESKey)
+            let masterAESKey = try secureEnclaveModule.unwrap(token.wrappedAESKey)
 
+            return LicenseInfo(
+                masterAESKey: masterAESKey,
+                expirationDate: token.expirationDate,
+                deviceFingerprint: token.deviceFingerprint
+            )
         } catch let error as LicenseGateError {
             throw error
         } catch let error as KeychainAdapterError where error == .tokenNotFound {

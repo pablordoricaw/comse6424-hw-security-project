@@ -175,12 +175,12 @@ struct LicenseGateTests {
         let certificate = try makeCertificate(masterAESKey: masterKey)
         try gate.activate(with: certificate)
 
-        let unlocked = try gate.unlock()
+        let info = try gate.unlock()
 
         var originalBytes = [UInt8]()
         var unlockedBytes = [UInt8]()
         masterKey.withUnsafeBytes { originalBytes = Array($0) }
-        unlocked.withUnsafeBytes { unlockedBytes = Array($0) }
+        info.masterAESKey.withUnsafeBytes { unlockedBytes = Array($0) }
         #expect(originalBytes == unlockedBytes)
     }
 
@@ -201,12 +201,12 @@ struct LicenseGateTests {
             keychainAdapter: KeychainAdapter(tokenTag: "com.closecode.licensegate.token.test.gate"),
             secureEnclaveModule: SecureEnclaveModule(keyTag: "com.closecode.secureenclave.licensekey.test.gate")
         )
-        let unlocked = try relaunchedGate.unlock()
+        let info = try relaunchedGate.unlock()
 
         var originalBytes = [UInt8]()
         var unlockedBytes = [UInt8]()
         masterKey.withUnsafeBytes { originalBytes = Array($0) }
-        unlocked.withUnsafeBytes { unlockedBytes = Array($0) }
+        info.masterAESKey.withUnsafeBytes { unlockedBytes = Array($0) }
         #expect(originalBytes == unlockedBytes)
     }
 
