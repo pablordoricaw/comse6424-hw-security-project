@@ -4,11 +4,23 @@ import CryptoKit
 /// The vendor-issued artifact provided by the user at first launch.
 /// Contains the plaintext Master_AES_Key and must be zeroized from memory
 /// immediately after the Activation Flow completes.
-struct LicenseCertificate {
-    let masterAESKey: SymmetricKey      // AES-256 key that encrypts proprietary assets on disk
-    let expirationDate: Date            // License validity deadline
-    let deviceFingerprint: String       // IOPlatformUUID this license was issued for
-    let vendorSignature: Data           // P256 signature over the canonical signed payload
+public struct LicenseCertificate {
+    public let masterAESKey: SymmetricKey      // AES-256 key that encrypts proprietary assets on disk
+    public let expirationDate: Date            // License validity deadline
+    public let deviceFingerprint: String       // IOPlatformUUID this license was issued for
+    public let vendorSignature: Data           // P256 signature over the canonical signed payload
+
+    public init(
+        masterAESKey: SymmetricKey,
+        expirationDate: Date,
+        deviceFingerprint: String,
+        vendorSignature: Data
+    ) {
+        self.masterAESKey = masterAESKey
+        self.expirationDate = expirationDate
+        self.deviceFingerprint = deviceFingerprint
+        self.vendorSignature = vendorSignature
+    }
 }
 
 /// The vendor's P256 signing public key, hardcoded into the binary.
@@ -20,9 +32,7 @@ struct LicenseCertificate {
 ///   openssl ec -pubin -in vendor_public.pem -outform DER | base64
 enum VendorPublicKey {
     /// Replace this constant with the real vendor public key before production builds.
-    static let derBase64 = """
-    MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHmYshFUQwoutZSuX6I5L7etklCzEG63enJa80jba4q31IjYVSLNQbZZjCraTgY1a9tPCS0SJ/d7M0LMUXlnk5w==
-    """
+    static let derBase64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHmYshFUQwoutZSuX6I5L7etklCzEG63enJa80jba4q31IjYVSLNQbZZjCraTgY1a9tPCS0SJ/d7M0LMUXlnk5w=="
 
     #if DEBUG
     nonisolated(unsafe) static var _testOverride: P256.Signing.PublicKey? = nil
@@ -65,11 +75,39 @@ extension LicenseCertificate {
     }
 }
 
-enum LicenseCertificateError: Error, LocalizedError {
+extension LicenseCertificate: Codable {
+
+    private enum CodingKeys: String, CodingKey {
+        case masterAESKey
+        case expirationDate
+        case deviceFingerprint
+        case vendorSignature
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let keyData = try container.decode(Data.self, forKey: .masterAESKey)
+        masterAESKey = SymmetricKey(data: keyData)
+        expirationDate = try container.decode(Date.self, forKey: .expirationDate)
+        deviceFingerprint = try container.decode(String.self, forKey: .deviceFingerprint)
+        vendorSignature = try container.decode(Data.self, forKey: .vendorSignature)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        let keyData = masterAESKey.withUnsafeBytes { Data($0) }
+        try container.encode(keyData, forKey: .masterAESKey)
+        try container.encode(expirationDate, forKey: .expirationDate)
+        try container.encode(deviceFingerprint, forKey: .deviceFingerprint)
+        try container.encode(vendorSignature, forKey: .vendorSignature)
+    }
+}
+
+public enum LicenseCertificateError: Error, LocalizedError {
     case invalidVendorKey
     case invalidVendorSignature
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidVendorKey:
             return "Vendor public key is malformed or missing."

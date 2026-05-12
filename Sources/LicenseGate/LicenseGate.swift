@@ -2,19 +2,20 @@ import Foundation
 import CryptoKit
 import IOKit
 
-protocol LicenseGateProtocol {
+public protocol LicenseGateProtocol {
     func activate(with certificate: LicenseCertificate) throws
+    func deactivate() throws
     func unlock() throws -> SymmetricKey
 }
 
-enum LicenseGateError: Error, LocalizedError, Equatable {
+public enum LicenseGateError: Error, LocalizedError, Equatable {
     case deviceFingerprintMismatch(expected: String, actual: String)
     case licenseExpired(expiredOn: Date)
     case noLicenseToken
     case activationFailed(underlying: String)
     case unlockFailed(underlying: String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .deviceFingerprintMismatch(let expected, let actual):
             return "License was issued for device \(expected) but this device is \(actual)."
@@ -30,7 +31,7 @@ enum LicenseGateError: Error, LocalizedError, Equatable {
         }
     }
 
-    static func == (lhs: LicenseGateError, rhs: LicenseGateError) -> Bool {
+    public static func == (lhs: LicenseGateError, rhs: LicenseGateError) -> Bool {
         switch (lhs, rhs) {
         case (.deviceFingerprintMismatch, .deviceFingerprintMismatch): return true
         case (.licenseExpired, .licenseExpired):                       return true
@@ -52,20 +53,25 @@ private func readIOPlatformUUID() -> String? {
     return value?.takeRetainedValue() as? String
 }
 
-final class LicenseGate: LicenseGateProtocol {
+public final class LicenseGate: LicenseGateProtocol {
 
     private let keychainAdapter: KeychainAdapterProtocol
     private let secureEnclaveModule: SecureEnclaveModuleProtocol
 
+    public init () {
+        self.keychainAdapter = KeychainAdapter()
+        self.secureEnclaveModule = SecureEnclaveModule()
+    }
+
     init(
-        keychainAdapter: KeychainAdapterProtocol = KeychainAdapter(),
-        secureEnclaveModule: SecureEnclaveModuleProtocol = SecureEnclaveModule()
+        keychainAdapter: KeychainAdapterProtocol,
+        secureEnclaveModule: SecureEnclaveModuleProtocol
     ) {
         self.keychainAdapter = keychainAdapter
         self.secureEnclaveModule = secureEnclaveModule
     }
 
-    func activate(with certificate: LicenseCertificate) throws {
+    public func activate(with certificate: LicenseCertificate) throws {
         do {
             // Step 1: Verify vendor signature.
             try certificate.verifyVendorSignature()
@@ -98,8 +104,17 @@ final class LicenseGate: LicenseGateProtocol {
             throw LicenseGateError.activationFailed(underlying: error.localizedDescription)
         }
     }
+ 
+    public func deactivate() throws {
+        do {
+            try secureEnclaveModule.deleteKey()
+            try keychainAdapter.delete()
+        } catch {
+            throw LicenseGateError.activationFailed(underlying: error.localizedDescription)
+        }
+    }
 
-    func unlock() throws -> SymmetricKey {
+    public func unlock() throws -> SymmetricKey {
         do {
             // Step 1: Retrieve the stored License Token.
             let token = try keychainAdapter.load()

@@ -11,11 +11,21 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "CloseCode",
+            name: "get-fingerprint",
+            path: "Sources/GetFingerprint",
+            linkerSettings: [.linkedFramework("IOKit")]
+        ),
+        .executableTarget(
+            name: "generate-cert",
+            path: "Sources/GenerateCert",
+        ),
+        .executableTarget(
+            name: "closecode",
             dependencies: [
                 "TUIkit",
                 "LicenseGate"
-            ]
+            ],
+            path: "Sources/CloseCode",
         ),
         .target(
             name: "LicenseGate",
