@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import Darwin
 
-public struct EnrichedPrompt {
+public struct EnrichedPrompt: Sendable{
     public let userQuery: String
     public let astContext: String?
     public let ragContext: String?
@@ -48,9 +48,9 @@ public final class AssetStore {
     public init() {}
 
     /// Call once during launch, before the TUI starts.
-    public func load(masterAESKey: SymmetricKey) throws {
-        astHandle = try decryptAndLoad(bundleName: "ast", key: masterAESKey, symbol: "ast_query", into: &astQuery)
-        ragHandle = try decryptAndLoad(bundleName: "rag", key: masterAESKey, symbol: "rag_query", into: &ragQuery)
+    public func load(masterAESKey: SymmetricKey, resourceBundle: Bundle) throws {
+        astHandle = try decryptAndLoad(bundleName: "ast", key: masterAESKey, symbol: "ast_query", bundle: resourceBundle, into: &astQuery)
+        ragHandle = try decryptAndLoad(bundleName: "rag", key: masterAESKey, symbol: "rag_query", bundle: resourceBundle, into: &ragQuery)
     }
 
     deinit {
@@ -62,10 +62,10 @@ public final class AssetStore {
         bundleName: String,
         key: SymmetricKey,
         symbol: String,
+        bundle: Bundle,
         into target: inout F?
     ) throws -> UnsafeMutableRawPointer? {
-        // 1. Locate the encrypted bundle inside the app binary's resources
-        guard let bundleURL = Bundle.main.url(forResource: bundleName, withExtension: "bundle") else {
+        guard let bundleURL = bundle.url(forResource: bundleName, withExtension: "bundle") else {
             throw PromptPipelineError.bundleNotFound("\(bundleName).bundle")
         }
 
@@ -112,7 +112,7 @@ public final class AssetStore {
     }
 }
 
-public actor PromptPipeline {
+public class PromptPipeline {
 
     private let assets: AssetStore
 
@@ -120,10 +120,13 @@ public actor PromptPipeline {
         self.assets = assets
     }
 
-    public func process(userQuery: String) async -> EnrichedPrompt {
-        let ast = runQuery(assets.astQuery, input: userQuery, label: "AST")
-        let rag = runQuery(assets.ragQuery, input: userQuery, label: "RAG")
-        return EnrichedPrompt(userQuery: userQuery, astContext: ast, ragContext: rag)
+    public func process(userQuery: String) throws -> EnrichedPrompt {
+        guard let astContext = runQuery(assets.astQuery, input: userQuery, label: "AST"),
+            let ragContext = runQuery(assets.ragQuery, input: userQuery, label: "RAG")
+        else {
+            throw PromptPipelineError.loadFailed("Query functions not loaded — dlsym likely failed")
+        }
+        return EnrichedPrompt(userQuery: userQuery, astContext: astContext, ragContext: ragContext)
     }
 
     private func runQuery(

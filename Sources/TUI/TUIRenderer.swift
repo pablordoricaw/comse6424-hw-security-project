@@ -30,6 +30,7 @@ struct PromptView: View {
     @State private var scrollOffset: Int = 0
     @State private var outputLines: [String] = ["Type /help for available commands."]
     @State private var viewportHeight: Int = 0  // tracked at render time
+    @State private var activeTask: Task<Void, Never>? = nil
 
     var body: some View {
         statusBar.showSystemItems = false
@@ -148,12 +149,13 @@ struct PromptView: View {
             outputLines = ["Type /help for available commands."]
 
         default:
-            Task {
-                guard let assets = sharedAssetStore else { return }
-                let pipeline = PromptPipeline(assets: assets)
-                let enriched = await pipeline.process(userQuery: trimmed)
-                // enriched.rendered is the final prompt string → inference server
-                outputLines = ["[Pipeline ready] \(enriched.rendered)"]
+            do {
+                let pipeline = PromptPipeline(assets: sharedAssetStore!)
+                let enriched = try pipeline.process(userQuery: trimmed)
+                outputLines = ["[Pipeline ready]"] + enriched.rendered
+                    .components(separatedBy: "\n")
+            } catch {
+                outputLines = ["Pipeline error: \(error.localizedDescription)"]
             }
         }
     }

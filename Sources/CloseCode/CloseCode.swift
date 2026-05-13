@@ -1,7 +1,8 @@
 import Foundation
 import CryptoKit
-import LicenseGate
 
+import LicenseGate
+import PromptPipeline
 import TUI
 
 @main
@@ -64,7 +65,7 @@ private func runUseFlow() {
         // Decrypt and dlopen AST + RAG dylibs before TUI starts.
         // AssetStore holds the dlopen handles for the app's lifetime.
         let assets = AssetStore()
-        try assets.load(masterAESKey: licenseInfo.masterAESKey)
+        try assets.load(masterAESKey: licenseInfo.masterAESKey, resourceBundle: Bundle.module)
 
         runTUI(licenseInfo: licenseInfo, assets: assets)
 
