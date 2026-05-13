@@ -81,30 +81,41 @@ License Certificate (vendor-signed JSON)
 swiftly run swift run get-fingerprint
 ```
 
-### 2. Generate a license certificate (vendor side)
+### 2. Generate the master AES key (vendor side)
+
+The master AES key is a 256-bit random symmetric key used to encrypt the AST and RAG engine bundles. Generate it once and store it securely — it must be kept secret and reused consistently for all certificate issuance and asset encryption.
+
+```bash
+openssl rand 32 > master_aes.key
+```
+
+> [!WARNING]
+> Keep `master_aes.key` secret. Anyone with this file can decrypt the proprietary asset bundles directly, bypassing the entire license enforcement mechanism.
+
+### 3. Generate a license certificate (vendor side)
 
 ```bash
 swiftly run swift run generate-cert \
     --fingerprint <IOPlatformUUID> \
     --expiration <YYYY-MM-DD> \
-    --master-key <path/to/master_aes.key> \
+    --master-key master_aes.key \
     --vendor-key <path/to/vendor_private.pem> \
     --out license.cert
 ```
 
-### 3. Activate CloseCode on your device
+### 4. Activate CloseCode on your device
 
 ```bash
 swiftly run swift run closecode --activate license.cert
 ```
 
-### 4. Run CloseCode
+### 5. Run CloseCode
 
 ```bash
 swiftly run swift run closecode
 ```
 
-### 5. Deactivate (removes SE key and Keychain token)
+### 6. Deactivate (removes SE key and Keychain token)
 
 ```bash
 swiftly run swift run closecode --deactivate
