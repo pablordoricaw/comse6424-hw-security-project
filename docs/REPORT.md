@@ -17,7 +17,7 @@
 6. [Threat Model](#6-threat-model)
 7. [Security Validation](#7-security-validation)
 8. [Residual Risk](#8-residual-risk)
-9. [Conclusion](#9-conclusion)
+9. [References](#references)
 
 ## 1. Introduction
 
@@ -31,7 +31,8 @@ The application runs exclusively on macOS 15+ with Apple Silicon. The Secure Enc
 
 The central security claim is that bypassing the license check in software alone is insufficient to access the proprietary functionality. An attacker who manages to patch a branch condition or hook a return value still does not obtain the `Master_AES_Key` needed to decrypt the engines. The hardware must participate in every successful unlock.
 
-> **Scope note:** The AST and RAG engines are stubs that simulate the behavior of real proprietary enrichment engines -- they do not perform actual static analysis or vector retrieval. Similarly, the embedded inference runtime is not implemented; the Prompt Pipeline assembles and surfaces the enriched prompt but does not submit it to a local LLM. The project scope is intentionally focused on the licensing and security enforcement infrastructure rather than on building a production AI agent.
+> [!NOTE]
+> The AST and RAG engines are stubs that simulate the behavior of real proprietary enrichment engines. They do not perform actual static analysis or vector retrieval. Similarly, the embedded inference runtime is not implemented. The Prompt Pipeline assembles and surfaces the enriched prompt but does not submit it to a local LLM. The project scope is intentionally focused on the licensing and security enforcement infrastructure rather than on building a production AI agent.
 
 ## 3. System Architecture
 
@@ -50,7 +51,7 @@ CloseCode is structured as a Swift Package with six distinct modules. Each modul
 
 The C4 component diagram below shows all internal processes, their data flows, and the trust boundaries they cross.
 
-<img src="./docs/figs/c4-component-diagram.png" width="1200" />
+<img src="./figs/c4-component-diagram.png" width="1200" />
 
 The diagram identifies three trust boundaries relevant to the security analysis:
 
@@ -58,35 +59,57 @@ The diagram identifies three trust boundaries relevant to the security analysis:
 - **TB2 (Hardware / OS):** Separates the main CPU and macOS from the Secure Enclave coprocessor. Defended by Apple Silicon hardware isolation. Neither attacker persona can pierce this boundary.
 - **TB3 (Cryptographic / In-Memory):** Separates encrypted assets on disk and in the Keychain from plaintext keys and algorithms in RAM. Unlocking this boundary strictly requires hardware participation across TB2.
 
-***
-
 ## 4. Cryptographic Design
-
-The security model has two phases: a vendor-side preparation phase and a device-side lifecycle that runs for every activation and launch.
 
 ### 4.1 Master AES Key and Asset Encryption (Vendor Side)
 
-Before CloseCode ships to any user, the vendor prepares the encrypted proprietary assets. A 256-bit random symmetric key, the `Master_AES_Key`, is generated using a cryptographically secure random number generator. This key is the single secret that gates all access to the proprietary functionality.
+Before CloseCode ships to any user, the vendor prepares the encrypted proprietary assets. A 256-bit random symmetric key, the `Master_AES_Key`, is generated using OpenSSL's cryptographically secure random number generator and stored as a raw 32-byte binary file:
+
+```bash
+openssl rand 32 > master_aes.key
+```
+
+This key is generated once, kept secret by the vendor, and reused consistently for all subsequent certificate issuance and asset encryption. It is the single secret that gates access to the proprietary functionality.
 
 The AST engine and RAG engine are compiled as standalone Swift dylibs (`ast_engine.swift` and `rag_engine.swift`), then code-signed with the vendor's Developer ID. Each dylib is then encrypted using AES-256-GCM with a 12-byte random nonce prepended to the ciphertext. The nonce is unique per encryption. AES-GCM provides both confidentiality and authentication. Any tampering with the ciphertext body invalidates the authentication tag and causes decryption to fail cleanly. The encrypted outputs are stored as `ast.bundle` and `rag.bundle` inside `Sources/CloseCode/Resources/` and are compiled into the application bundle. This is handled by `scripts/encrypt-assets.sh`.
 
 ### 4.2 License Certificate Generation
 
-For each user, the vendor generates a `LicenseCertificate`: a JSON document containing the `licenseId`, an `expirationDate`, the user's `deviceFingerprint` (`IOPlatformUUID`), and the plaintext `Master_AES_Key`. This entire document is signed using the vendor's P-256 private key via CryptoKit's `P256.Signing`. The signature prevents any field from being forged or altered without detection.
+Certificate issuance follows a three-step out-of-band exchange between the user and the vendor:
 
-An example certificate (with key material truncated for readability):
+1. **User obtains device fingerprint.** The user runs the `get-fingerprint` CLI tool, a lightweight Swift executable that reads the machine's `IOPlatformUUID` directly from IOKit and prints it to stdout:
 
-```json
-{
-  "licenseId": "550e8400-e29b-41d4-a716-446655440000",
-  "expirationDate": "2027-05-12",
-  "deviceFingerprint": "9E570AA0-6871-5CB9-BE57-B647E25F4738",
-  "masterAESKey": "base64encodedAES256KeyMaterial==",
-  "vendorSignature": "base64encodedP256Signature=="
-}
-```
+   ```bash
+   swift run get-fingerprint
+   # 9E570AA0-6871-5CB9-BE57-B647E25F4738
+   ```
 
-The certificate is delivered out-of-band to the user (e.g., by email) and is not stored on the device after a production activation. For the purposes of security testing in this project, the `license.cert` file is intentionally retained on disk after activation so that the attack simulation suite (`scripts/simulate-attacks.sh`) can restore a valid activation state between attack scenarios by re-running `--activate`. In a production deployment, the certificate file should be deleted or handed off securely after the initial activation completes.
+   The user sends this value to the vendor through whatever channel the purchase flow provides (e.g., a web form or email).
+
+2. **Vendor generates the certificate.** With the fingerprint in hand, the vendor runs the `generate-cert` CLI tool, a second Swift executable that assembles the `LicenseCertificate` JSON, embeds the `Master_AES_Key`, and signs the entire document using the vendor's P-256 private key via CryptoKit's `P256.Signing`:
+
+   ```bash
+   swift run generate-cert \
+       --fingerprint 9E570AA0-6871-5CB9-BE57-B647E25F4738 \
+       --expiration 2027-05-12 \
+       --master-key master_aes.key \
+       --vendor-key vendor_private.pem \
+       --out license.cert
+   ```
+
+   The resulting `LicenseCertificate` is a JSON document containing the `licenseId`, `expirationDate`, `deviceFingerprint`, plaintext `masterAESKey`, and `vendorSignature`. The signature covers all fields, so any alteration to any field is detectable at activation time. An example certificate (with key material truncated for readability):
+
+   ```json
+   {
+     "licenseId": "550e8400-e29b-41d4-a716-446655440000",
+     "expirationDate": "2027-05-12",
+     "deviceFingerprint": "9E570AA0-6871-5CB9-BE57-B647E25F4738",
+     "masterAESKey": "base64encodedAES256KeyMaterial==",
+     "vendorSignature": "base64encodedP256Signature=="
+   }
+   ```
+
+3. **Vendor delivers the certificate to the user.** The `license.cert` file is sent out-of-band (e.g., by email). It is not stored on any server after delivery.
 
 ### 4.3 Activation: Hardware Binding
 
@@ -99,17 +122,15 @@ When the user runs `closecode --activate license.cert`, the License Gate perform
 5. **Key wrapping:** The `Master_AES_Key` extracted from the certificate is encrypted (wrapped) using the SE public key via `P256.KeyAgreement` with HKDF-SHA256. The result is the `Wrapped_AES_Key`.
 6. **Token storage:** A `LicenseToken` struct containing the `Wrapped_AES_Key`, `expirationDate`, and `deviceFingerprint` is serialized to JSON and stored in the macOS Keychain under `kSecClassGenericPassword` with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`. The plaintext `Master_AES_Key` is discarded from memory.
 
-After activation, the `Master_AES_Key` no longer exists anywhere on the machine in plaintext. The only way to recover it is through the Secure Enclave.
-
 ### 4.4 Launch: Decryption and Engine Initialization
 
 On every subsequent launch, the following sequence runs before the TUI is shown:
 
-1. **Token retrieval:** `KeychainAdapter` reads the `LicenseToken` from the Keychain.
-2. **Token validation:** The expiration date and device fingerprint are re-checked.
-3. **SE unwrap:** `SecureEnclaveModule` passes the `Wrapped_AES_Key` to the Secure Enclave. The SE uses its stored private key to unwrap it, returning the plaintext `Master_AES_Key` into process memory.
-4. **Asset decryption:** `PromptPipeline` reads `ast.bundle` and `rag.bundle` from disk. For each, it extracts the 12-byte nonce, then decrypts the ciphertext using AES-256-GCM with the `Master_AES_Key`. The authentication tag is verified; if it fails, the launch aborts.
-5. **`dlopen` and zeroize:** The decrypted dylib bytes are written to a temporary file, `dlopen`'d into the process, and then the temporary file is immediately deleted. The `Master_AES_Key` is zeroized from memory as soon as both dylibs are loaded.
+1. **Token retrieval:** The License Gate reads the `LicenseToken` from the macOS Keychain.
+2. **Token validation:** The expiration date and device fingerprint stored in the token are re-checked against the current system time and live `IOPlatformUUID`. Any mismatch aborts the launch.
+3. **SE unwrap:** The License Gate passes the `Wrapped_AES_Key` to the Secure Enclave. The enclave uses its stored non-exportable private key to unwrap it, returning the plaintext `Master_AES_Key` into process memory. This step cannot succeed on any machine other than the one that performed the original activation.
+4. **Asset decryption:** The Prompt Pipeline reads the encrypted engine bundles from disk. For each bundle, it extracts the prepended 12-byte nonce and decrypts the ciphertext using AES-256-GCM with the `Master_AES_Key`. The AES-GCM authentication tag is verified; any tampering with the bundle causes this check to fail and the launch to abort.
+5. **Engine loading and key zeroization:** The decrypted engine binaries are loaded into the process and the `Master_AES_Key` is immediately zeroized from memory. The plaintext key exists in RAM only for the duration of the decryption step.
 6. **TUI launch:** Only after all of the above succeed does the TUI become available to the user.
 
 This sequence ensures the proprietary engines are never accessible without hardware participation, and that the plaintext key has the shortest possible lifetime in memory.
@@ -118,7 +139,7 @@ This sequence ensures the proprietary engines are never accessible without hardw
 
 ### 5.1 Swift Package Structure
 
-The project is a single Swift Package (`Package.swift`) defining six executable and library targets. All targets are compiled with Swift 6's strict concurrency model and the Hardened Runtime entitlement is applied to the main `closecode` binary.
+CloseCode is a single Swift Package (Package.swift) defining six executable and library targets. All targets are compiled with Swift 6's strict concurrency model. The Hardened Runtime entitlement is applied exclusively to the `closecode` binary. The two vendor-side tools (get-fingerprint and generate-cert) run in a trusted offline context and do not require the Hardened Runtime entitlement.
 
 ### 5.2 Keychain Adapter
 
@@ -130,9 +151,9 @@ The project is a single Swift Package (`Package.swift`) defining six executable 
 
 ### 5.4 Prompt Pipeline
 
-`PromptPipeline` handles the AES-GCM decryption of both bundles at runtime. It reads the nonce from the first 12 bytes of each bundle file, calls CryptoKit's `AES.GCM.open`, and on authentication failure throws immediately rather than attempting any partial use of the data. The `dlopen` approach ensures the dylibs are never written to a persistent location after decryption -- the temporary file exists only for the duration of the `dlopen` call and is unlinked immediately after.
+`PromptPipeline` handles the AES-GCM decryption of both bundles at runtime. It reads the nonce from the first 12 bytes of each bundle file, calls CryptoKit's `AES.GCM.open`, and on authentication failure throws immediately rather than attempting any partial use of the data. The `dlopen` approach ensures the dylibs are never written to a persistent location after decryption. The temporary file exists only for the duration of the `dlopen` call and is unlinked immediately after.
 
-Because the AST and RAG engines are stubs in this implementation, the pipeline decrypts, loads, and calls into the dylibs successfully -- but the enrichment output is simulated rather than derived from real static analysis or vector retrieval. This is sufficient to validate the full cryptographic enforcement path end-to-end.
+Because the AST and RAG engines are stubs in this implementation, the pipeline decrypts, loads, and calls into the dylibs successfully where the enrichment output is simulated rather than derived from real static analysis or vector retrieval. This is sufficient to validate the full cryptographic enforcement path end-to-end.
 
 ### 5.5 Asset Encryption Script
 
@@ -146,15 +167,15 @@ The terminal UI is built with TUIKit, a custom Swift library implementing a full
 
 **After launch (`/clear` state):**
 
-<img src="./docs/figs/closecode-clear.png" width="900" />
+<img src="./figs/closecode-clear.png" width="900" />
 
 **`/help` command:**
 
-<img src="./docs/figs/closecode-help.png" width="900" />
+<img src="./figs/closecode-help.png" width="900" />
 
 **Live prompt: "Hello CloseCode!":**
 
-<img src="./docs/figs/closecode-prompt.png" width="900" />
+<img src="./figs/closecode-prompt.png" width="900" />
 
 ## 6. Threat Model
 
@@ -162,9 +183,9 @@ The terminal UI is built with TUIKit, a custom Swift library implementing a full
 
 Two attacker personas are modeled. Both hold a valid license for a single device and have root access to their macOS machine. Neither can compromise Secure Enclave hardware or firmware.
 
-**Tier 1: Motivated Competitor (primary design target).** A developer building a competing AI coding agent who has legitimately purchased a CloseCode license to study the product. They have root access, general developer tooling (`lldb`, Instruments, `dtrace`), and can inspect the filesystem and Keychain. They cannot perform static binary analysis, dynamic binary instrumentation, microarchitectural side-channel attacks, or modify signed binaries without triggering Gatekeeper failures.
+- **Tier 1: Motivated Competitor (primary design target).** A developer building a competing AI coding agent who has legitimately purchased a CloseCode license to study the product. They have root access, general developer tooling (`lldb`, Instruments, `dtrace`), and can inspect the filesystem and Keychain. They cannot perform static binary analysis, dynamic binary instrumentation, microarchitectural side-channel attacks, or modify signed binaries without triggering Gatekeeper failures.
 
-**Tier 2: Security Researcher (document and partially mitigate).** Everything in Tier 1, plus: static binary analysis (`otool`, Ghidra, IDA Pro), dynamic binary instrumentation (Frida, `lldb` scripting, `DYLD_INSERT_LIBRARIES`), memory forensics and heap inspection, microarchitectural side-channel attacks, and SIP disabled.
+- **Tier 2: Security Researcher (document and partially mitigate).** Everything in Tier 1, plus: static binary analysis (`otool`, Ghidra, IDA Pro), dynamic binary instrumentation (Frida, `lldb` scripting, `DYLD_INSERT_LIBRARIES`), memory forensics and heap inspection, microarchitectural side-channel attacks, and SIP disabled.
 
 The **design target** is full mitigation of all Tier 1 attacks. Tier 2 attack paths are documented and mitigated where feasible; residual exposure is explicitly accepted.
 
@@ -187,11 +208,11 @@ The system has three trust boundaries (TB1: OS/Application, TB2: Hardware/SE, TB
 | Denial of Service | Token/asset deletion; SE disruption | Fails closed | Fails closed |
 | Elevation of Privilege | Control-flow bypass of license gate; cross-device token use | Fully mitigated | Partially mitigated |
 
-The key insight across all STRIDE categories is that cryptographic binding converts "bypass the check" from a control-flow problem into a cryptographic problem. A Tier 1 attacker who patches the branch guard still gets a `Master_AES_Key` of all zeroes or a decryption failure -- not a working engine.
+The key insight across all STRIDE categories is that cryptographic binding converts "bypass the check" from a control-flow problem into a cryptographic problem. So an attacker who patches the branch guard still gets a `Master_AES_Key` of all zeroes or a decryption failure instead of a working engine.
 
 ## 7. Security Validation
 
-Phase 3 validation runs `scripts/simulate-attacks.sh`, which automates five attack scenarios against a live activated instance of CloseCode and asserts both that the expected error fires and that proprietary assets (`Pipeline ready`, `AST Context`, `RAG Context`) are never exposed. The full simulation output is logged to `logs/attack-simulation.log`.
+Automated the security validation with a Bash script, `scripts/simulate-attacks.sh`, which automates five attack scenarios against a live activated instance of CloseCode and asserts both that the expected error fires and that proprietary assets (`Pipeline ready`, `AST Context`, `RAG Context`) are never exposed. The full simulation output is logged to `logs/attack-simulation.log`.
 
 ```
 Results: 10/10 passed, 0/10 failed
@@ -207,7 +228,7 @@ Results: 10/10 passed, 0/10 failed
 
 **Test methodology:** Each attack is performed against a fully activated, working instance. After each attack the simulation script restores the valid activation state before proceeding to the next test. Each assertion pair checks both that the failure mode matches and that no proprietary asset string appears in the output.
 
-**Tier 2 attacks not simulated:** IOPlatformUUID spoofing via Frida (requires SIP disabled and binary instrumentation capability outside Tier 1 scope), post-unlock memory extraction via kernel debugger, microarchitectural side-channel attacks, and system clock rollback (accepted residual risk, documented below).
+**Tier 2 attacks not validated:** `IOPlatformUUID` spoofing via Frida (requires SIP disabled and binary instrumentation capability outside Tier 1 scope), post-unlock memory extraction via kernel debugger, microarchitectural side-channel attacks, and system clock rollback (accepted residual risk, documented below).
 
 ## 8. Residual Risk
 
@@ -221,16 +242,26 @@ The application executes on the general-purpose Apple Silicon CPU alongside othe
 
 ### Local Denial of Service
 
-A root-capable user can delete the Keychain token or corrupt the encrypted bundle files, rendering the application unusable on that machine. CloseCode fails closed in all such cases, which protects the assets but does not maintain availability. This is the correct tradeoff -- a user sabotaging their own machine's availability is not a DRM failure.
+A root-capable user can delete the Keychain token or corrupt the encrypted bundle files, rendering the application unusable on that machine. CloseCode fails closed in all such cases, which protects the assets but does not maintain availability.
 
 ### License Expiration Bypass (Clock Rollback)
 
 Because CloseCode operates fully offline, it relies on the local macOS system clock to evaluate whether a license has expired. A root-capable user can disconnect from the network, roll back the system clock to a date before the certificate expiration, and successfully activate or reuse an expired license. The expiration date inside the `LicenseToken` is protected by the vendor signature and cannot be altered, but the *evaluation* of that date depends on an input the attacker controls.
 
-A possible mitigation would be to implement a monotonic timekeeping mechanism inside the application -- for example, recording the last-seen system time in a Keychain item or SE-protected counter and refusing to run if the current time appears to have moved backward beyond a configurable tolerance. This would make clock rollback detectable without requiring a network call. However, implementing a reliable, tamper-evident local clock that correctly handles legitimate user scenarios such as DST changes, NTP corrections, and machine sleep/wake cycles with low false-positive rates was beyond the scope of what could be completed in the project timeline. It remains the most actionable known improvement to the expiration enforcement mechanism.
+A possible mitigation would be to implement a monotonic timekeeping mechanism inside the application. Implementing a reliable, tamper-evident local clock that correctly handles legitimate user scenarios such as DST changes, NTP corrections, and machine sleep/wake cycles with low false-positive rates remains as the most actionable known improvement to the expiration enforcement mechanism.
 
-***
+## References
 
-## 9. Conclusion
-
-CloseCode demonstrates that hardware-backed software licensing can be implemented entirely offline, without a license server, and with a threat model that goes substantially beyond a boolean license check. The key design insight is that making the cryptographic key, not a control-flow branch, the capability needed to reach the proprietary functionality forces any attacker to break cryptographic binding rather than just skip a software check. Against the Tier 1 attacker persona, all five simulated attack scenarios are fully mitigated and verified by automated testing. Against the Tier 2 attacker persona, the architecture raises the bar from static reverse engineering to dynamic instrumentation on a legitimately activated device. The residual risks are accepted, documented, and each represents either a fundamental limit of fully-offline enforcement or a known improvement (the monotonic clock mechanism) that was scoped out for time.
+1. Simon Brown. *The C4 model for visualising software architecture.* https://c4model.com/
+2. Simon Brown. *Structurizr documentation.* https://docs.structurizr.com/
+3. Structurizr Playground. https://playground.structurizr.com/
+4. Anthropic. *Claude Code overview / documentation.* https://docs.anthropic.com/
+5. Open Code project repository. https://github.com/sst/opencode
+6. Microsoft. *The STRIDE Threat Model.* https://learn.microsoft.com/en-us/azure/security/develop/threat-modeling-tool-threats
+7. NIST. *Secure Hash Standard (SHS), FIPS 180-4.* https://csrc.nist.gov/pubs/fips/180-4/upd1/final
+8. NIST. *Recommendation for Keyed-Hash Message Authentication Codes (HMAC), FIPS 198-1.* https://csrc.nist.gov/pubs/fips/198-1/final
+9. NIST. *Digital Signature Standard (DSS), FIPS 186-5.* https://csrc.nist.gov/pubs/fips/186-5/final
+10. Apple Developer Documentation. *App Attest.* https://developer.apple.com/documentation/devicecheck/establishing_your_app_s_integrity
+11. Apple Developer Documentation. *Protecting keys with the Secure Enclave.* https://developer.apple.com/documentation/security/protecting_keys_with_the_secure_enclave
+12. Intel. *Intel Software Guard Extensions (Intel SGX).* https://www.intel.com/content/www/us/en/developer/tools/software-guard-extensions/overview.html
+13. Martin Fowler. *Architecture Decision Records.* https://martinfowler.com/articles/adr.html
