@@ -70,33 +70,33 @@ struct PromptView: View {
                 scrollOffset = min(maxOffset, scrollOffset + 1)
                 return true
 
-            // Ctrl+K — up 1
+            // Ctrl+K: up 1
             case (.character("k"), true, _):
                 scrollOffset = max(0, scrollOffset - 1)
                 return true
 
-            // Ctrl+J is 0x0A (line feed) — the terminal never sends it as .character("j")
+            // Ctrl+J is 0x0A (line feed): the terminal never sends it as .character("j")
             // Use Ctrl+L for down 1 instead (safe, no terminal conflict)
             case (.character("l"), true, _):
                 scrollOffset = min(maxOffset, scrollOffset + 1)
                 return true
 
-            // Ctrl+U — half page up
+            // Ctrl+U: half page up
             case (.character("u"), true, _):
                 scrollOffset = max(0, scrollOffset - (viewportHeight / 2))
                 return true
 
-            // Ctrl+D — half page down
+            // Ctrl+D: half page down
             case (.character("d"), true, _):
                 scrollOffset = min(maxOffset, scrollOffset + (viewportHeight / 2))
                 return true
 
-            // Ctrl+G (lowercase) — jump to bottom
+            // Ctrl+G (lowercase): jump to bottom
             case (.character("g"), true, false):
                 scrollOffset = maxOffset
                 return true
 
-            // Ctrl+Shift+G (you're pressing this for capital G) — jump to top
+            // Ctrl+Shift+G (you're pressing this for capital G): jump to top
             case (.character("g"), true, true):
                 scrollOffset = 0
                 return true

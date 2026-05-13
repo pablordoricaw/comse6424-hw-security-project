@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Config — edit these to match your project
+# Config edit these to match your project
 # ---------------------------------------------------------------------------
 SESSION_NAME="hw-sec-project"
 WINDOWS=("local-1" "local-2")

@@ -103,7 +103,7 @@ struct LicenseGateTests {
         let first = try makeCertificate(expirationDate: Date(timeIntervalSinceNow: 86400))
         try gate.activate(with: first)
  
-        // Fresh SE instance for re-activation — mirrors what actually happens on relaunch.
+        // Fresh SE instance for re-activation that mirrors what actually happens on relaunch.
         try se.deleteKey()
         let reactivationGate = LicenseGate(
             keychainAdapter: keychain,
@@ -188,7 +188,7 @@ struct LicenseGateTests {
     func unlockAcrossRelaunch() throws {
         defer { cleanup() }
 
-        // First gate instance — activation (first launch).
+        // First gate instance activation (first launch).
         let masterKey = SymmetricKey(size: .bits256)
         let certificate = try makeCertificate(masterAESKey: masterKey)
         try gate.activate(with: certificate)
@@ -196,7 +196,7 @@ struct LicenseGateTests {
         let storedToken = try keychain.load()
         #expect(storedToken.deviceFingerprint == currentUUID())
 
-        // Second gate instance sharing the same Keychain and SE key — use flow (relaunch).
+        // Second gate instance sharing the same Keychain and SE key use flow (relaunch).
         let relaunchedGate = LicenseGate(
             keychainAdapter: KeychainAdapter(tokenTag: "com.closecode.licensegate.token.test.gate"),
             secureEnclaveModule: SecureEnclaveModule(keyTag: "com.closecode.secureenclave.licensekey.test.gate")

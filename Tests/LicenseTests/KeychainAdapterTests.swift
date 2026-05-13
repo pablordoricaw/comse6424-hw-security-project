@@ -67,7 +67,7 @@ struct KeychainAdapterTests {
     @Test("load round-trips expirationDate with sub-second precision")
     func loadRoundTripsExpirationDate() throws {
         defer { cleanup() }
-        // JSONEncoder encodes Date as a Double (TimeInterval) — sub-second precision is preserved.
+        // JSONEncoder encodes Date as a Double (TimeInterval) where sub-second precision is preserved.
         let date = Date(timeIntervalSinceReferenceDate: 1_000_000.123456)
         let token = makeToken(expirationDate: date)
 

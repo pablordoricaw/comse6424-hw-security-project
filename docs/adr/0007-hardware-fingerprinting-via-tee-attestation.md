@@ -1,7 +1,7 @@
 # ADR-0007: Hardware Fingerprinting via TEE Attestation and Challenge-Response Verification
 
 **Date:** 2026-04-18  
-**Status:** Accepted — Amended 2026-04-20 (see Amendment below)  
+**Status:** Accepted: Amended 2026-04-20 (see Amendment below)  
 **Deciders:** Null and Void
 
 ---

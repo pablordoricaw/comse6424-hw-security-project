@@ -13,7 +13,7 @@
 
 > CloseCode is a final project for the **COMSE-6424 Hardware Security** course at Columbia University,
 > built under the *Licensed Software Application Immune to Software and Microarchitectural Attack* project option.
-> Unlike OpenCode, this one will cost you — and it *knows* if you haven't paid.
+> Unlike OpenCode, this one will cost you, and it *knows* if you haven't paid.
 
 - **Team:** Null and Void
   - Pablo Ordorica Wiener ([@pablordoricaw](www.github.com/pablordoricaw))
@@ -25,9 +25,9 @@
 
 ## What It Does
 
-CloseCode is a terminal-based AI coding agent that enforces software licensing entirely offline using Apple Silicon hardware security primitives. It demonstrates that licensing can be cryptographically bound to a specific device — without any network calls, license servers, or always-online requirements.
+CloseCode is a terminal-based AI coding agent that enforces software licensing entirely offline using Apple Silicon hardware security primitives. It demonstrates that licensing can be cryptographically bound to a specific device without any network calls, license servers, or always-online requirements.
 
-The core security claim: **bypassing the license check in software is not sufficient to access the proprietary functionality.** The encrypted AST and RAG engines only decrypt if the Secure Enclave successfully unwraps the master AES key — a hardware operation that cannot be replicated on another machine.
+The core security claim: **bypassing the license check in software is not sufficient to access the proprietary functionality.** The encrypted AST and RAG engines only decrypt if the Secure Enclave successfully unwraps the master AES key with a hardware operation that cannot be replicated on another machine.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ CloseCode is built as a Swift Package with the following modules:
 
 | Module | Description |
 |---|---|
-| `CloseCode` | Main entrypoint — activation, use, and deactivation flows |
+| `CloseCode` | Main entrypoint: activation, use, and deactivation flows |
 | `LicenseGate` | Orchestrates license validation, Keychain adapter, and SE module |
 | `TUI` | Terminal UI renderer (TUIkit) with scrollable prompt output |
 | `PromptPipeline` | Decrypts and `dlopen`s AST + RAG dylibs; assembles enriched prompts |

@@ -38,7 +38,7 @@ public enum PromptPipelineError: Error, LocalizedError {
 /// Holds the dlopen handles for the lifetime of the app.
 public final class AssetStore {
 
-    // dlopen handles — kept alive so the dylibs stay mapped in memory
+    // dlopen handles kept alive so the dylibs stay mapped in memory
     private var astHandle: UnsafeMutableRawPointer?
     private var ragHandle: UnsafeMutableRawPointer?
 
@@ -98,7 +98,7 @@ public final class AssetStore {
             throw PromptPipelineError.loadFailed("dlopen failed for '\(bundleName)': \(reason)")
         }
 
-        // 5. Delete the temp file immediately — dyld keeps it mapped via fd
+        // 5. Delete the temp file immediately while dyld keeps it mapped via fd
         try? FileManager.default.removeItem(at: tmp)
 
         // 6. Resolve the symbol
@@ -124,7 +124,7 @@ public class PromptPipeline {
         guard let astContext = runQuery(assets.astQuery, input: userQuery, label: "AST"),
             let ragContext = runQuery(assets.ragQuery, input: userQuery, label: "RAG")
         else {
-            throw PromptPipelineError.loadFailed("Query functions not loaded — dlsym likely failed")
+            throw PromptPipelineError.loadFailed("Query functions not loaded: dlsym likely failed")
         }
         return EnrichedPrompt(userQuery: userQuery, astContext: astContext, ragContext: ragContext)
     }

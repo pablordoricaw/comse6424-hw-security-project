@@ -5,12 +5,12 @@
 - [Overview](#overview)
 - [Why SDL for CloseCode](#why-sdl-for-closecode)
 - [The SDL Loop](#the-sdl-loop)
-- [Phase 1 — Define Assets](#phase-1--define-assets)
-- [Phase 2 — Define the Attacker Model](#phase-2--define-the-attacker-model)
-- [Phase 3 — Threat Model the Application](#phase-3--threat-model-the-application)
-- [Phase 4 — Design Mitigations Into the Architecture](#phase-4--design-mitigations-into-the-architecture)
-- [Phase 5 — Implementation Analysis](#phase-5--implementation-analysis)
-- [Phase 6 — Review and Iterate](#phase-6--review-and-iterate)
+- [Phase 1: Define Assets](#phase-1--define-assets)
+- [Phase 2: Define the Attacker Model](#phase-2--define-the-attacker-model)
+- [Phase 3: Threat Model the Application](#phase-3--threat-model-the-application)
+- [Phase 4: Design Mitigations Into the Architecture](#phase-4--design-mitigations-into-the-architecture)
+- [Phase 5: Implementation Analysis](#phase-5--implementation-analysis)
+- [Phase 6: Review and Iterate](#phase-6--review-and-iterate)
 - [Living Documents](#living-documents)
 
 ## Overview
@@ -28,7 +28,7 @@ The instructions for this project explicitly require the design to account for:
 - Common software threats: memory corruption, control flow attacks, unsafe parsing or serialization, privilege misuse, and implementation bugs
 - Microarchitectural threats: shared resource leakage, speculative execution effects, and software fault injection attacks such as Rowhammer
 
-Addressing these threats systematically — rather than reactively — requires a structured process. The SDL provides that structure.
+Addressing these threats systematically rather than reactively requires a structured process. The SDL provides that structure.
 
 ## The SDL Loop
 

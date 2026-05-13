@@ -49,7 +49,7 @@ struct GenerateCert {
             components.second = 59
             let expirationDate = calendar.date(byAdding: components, to: parsedDate) ?? parsedDate
 
-            // Load the vendor Master AES key from file — same key used to
+            // Load the vendor Master AES key from file, the same key used to
             // encrypt ast.bundle / rag.bundle at build time.
             let masterAESKey = try loadMasterAESKey(from: masterKeyPath)
 

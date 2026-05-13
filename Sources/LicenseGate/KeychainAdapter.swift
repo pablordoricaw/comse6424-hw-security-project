@@ -115,7 +115,7 @@ final class KeychainAdapter: KeychainAdapterProtocol {
             kSecAttrAccount as String: tokenTag
         ]
         let status = SecItemDelete(query as CFDictionary)
-        // errSecItemNotFound is acceptable — deleting a non-existent item is a no-op.
+        // errSecItemNotFound is acceptable and deleting a non-existent item is a no-op.
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainAdapterError.deleteFailed(status: status)
         }

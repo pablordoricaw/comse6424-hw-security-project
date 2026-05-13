@@ -85,7 +85,7 @@ public final class LicenseGate: LicenseGateProtocol {
             // Step 2: Verify device fingerprint.
             try verifyDeviceFingerprint(against: certificate.deviceFingerprint)
 
-            // Step 3: Generate SE key pair — returns the public key immediately.
+            // Step 3: Generate SE key pair and returns the public key immediately.
             let publicKey = try secureEnclaveModule.generateAndStoreKeyPair()
 
             // Step 4: Wrap the Master_AES_Key using the SE public key.

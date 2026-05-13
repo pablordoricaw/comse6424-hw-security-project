@@ -71,7 +71,7 @@ struct SecureEnclaveModuleTests {
         let masterKey = SymmetricKey(size: .bits256)
         let wrapped1 = try module.wrap(masterKey, using: publicKey)
         let wrapped2 = try module.wrap(masterKey, using: publicKey)
-        // Each HPKE sender uses a fresh ephemeral key — outputs must differ.
+        // Each HPKE sender uses a fresh ephemeral key so outputs must differ.
         #expect(wrapped1 != wrapped2)
     }
 
@@ -96,7 +96,7 @@ struct SecureEnclaveModuleTests {
         let masterKey = SymmetricKey(size: .bits256)
         let wrapped = try module.wrap(masterKey, using: publicKey)
 
-        let truncated = wrapped.prefix(32) // Far too short — missing encap key + ciphertext.
+        let truncated = wrapped.prefix(32) // Far too short, it is missing encap key + ciphertext.
         #expect(throws: (any Error).self) {
             try module.unwrap(Data(truncated))
         }

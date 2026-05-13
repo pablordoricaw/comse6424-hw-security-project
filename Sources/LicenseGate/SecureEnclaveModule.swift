@@ -6,7 +6,7 @@ import Foundation
 protocol SecureEnclaveModuleProtocol {
     /// Generates a new SE-backed P-256 key pair and persists the private key reference.
     /// Returns the raw bytes of the exportable public key.
-    /// Call only once at activation — subsequent launches use `loadPublicKey()`.
+    /// Call only once at activation and subsequent launches use `loadPublicKey()`.
     func generateAndStoreKeyPair() throws -> P256.KeyAgreement.PublicKey
 
     /// Deletes the SE key pair associated with this module.
@@ -18,7 +18,7 @@ protocol SecureEnclaveModuleProtocol {
     func loadPublicKey() throws -> P256.KeyAgreement.PublicKey
 
     /// Wraps (encrypts) a SymmetricKey using the SE public key via HPKE.
-    /// Does not require SE hardware — uses the public key only.
+    /// Does not require SE hardware because it uses the public key only.
     func wrap(_ masterKey: SymmetricKey, using publicKey: P256.KeyAgreement.PublicKey) throws -> Data
 
     /// Unwraps (decrypts) a wrapped key blob using the SE-backed private key via HPKE.
@@ -83,7 +83,7 @@ final class SecureEnclaveModule: SecureEnclaveModuleProtocol {
         aead: .AES_GCM_128
     )
 
-    // Info and AAD strings bound to this application — prevents ciphertext
+    // Info and AAD strings bound to this application which prevents ciphertext
     // from being replayed across different app contexts.
     private let hpkeInfo = Data("com.closecode.licensegate.wrap".utf8)
     private let hpkeAAD  = Data("com.closecode.licensegate.aad".utf8)
@@ -175,10 +175,10 @@ final class SecureEnclaveModule: SecureEnclaveModuleProtocol {
     }
 
     // Stores the SE private key's opaque data representation in the Keychain.
-    // This is NOT the raw private key bytes — it is a handle that lets CryptoKit
+    // This is NOT the raw private key bytes, it is a handle that lets CryptoKit
     // re-attach to the SE-resident key on future launches.
     private func storeKeyData(_ data: Data) throws {
-        // Delete with a minimal query — kSecAttrAccessible is not valid on delete.
+        // Delete with a minimal query, kSecAttrAccessible is not valid on delete.
         let deleteQuery: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrAccount as String: keyTag
