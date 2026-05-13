@@ -10,6 +10,8 @@ struct GenerateCert {
               fingerprintIdx + 1 < args.count,
               let expirationIdx = args.firstIndex(of: "--expiration"),
               expirationIdx + 1 < args.count,
+              let masterKeyIdx = args.firstIndex(of: "--master-key"),
+              masterKeyIdx + 1 < args.count,
               let vendorKeyIdx = args.firstIndex(of: "--vendor-key"),
               vendorKeyIdx + 1 < args.count,
               let outIdx = args.firstIndex(of: "--out"),
@@ -19,31 +21,40 @@ struct GenerateCert {
                 usage: generate-cert \\
                     --fingerprint <IOPlatformUUID> \\
                     --expiration <YYYY-MM-DD> \\
+                    --master-key <path/to/master_aes.key> \\
                     --vendor-key <path/to/vendor_private.pem> \\
                     --out <path/to/license.cert>
                 """, stderr)
             exit(1)
         }
 
-        let fingerprint = args[fingerprintIdx + 1]
+        let fingerprint  = args[fingerprintIdx + 1]
         let expirationStr = args[expirationIdx + 1]
+        let masterKeyPath = args[masterKeyIdx + 1]
         let vendorKeyPath = args[vendorKeyIdx + 1]
-        let outPath = args[outIdx + 1]
+        let outPath       = args[outIdx + 1]
 
         do {
-            // Parse expiration date.
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.timeZone = TimeZone(identifier: "UTC")
-            guard let expirationDate = formatter.date(from: expirationStr) else {
+            guard let parsedDate = formatter.date(from: expirationStr) else {
                 exit(withError: "Invalid expiration date '\(expirationStr)'. Expected YYYY-MM-DD.")
             }
+            // Advance to end of day UTC so the license is valid through 23:59:59 UTC
+            let calendar = Calendar(identifier: .gregorian)
+            var components = DateComponents()
+            components.hour = 23
+            components.minute = 59
+            components.second = 59
+            let expirationDate = calendar.date(byAdding: components, to: parsedDate) ?? parsedDate
 
-            // Load vendor private key from PEM.
+            // Load the vendor Master AES key from file — same key used to
+            // encrypt ast.bundle / rag.bundle at build time.
+            let masterAESKey = try loadMasterAESKey(from: masterKeyPath)
+
+            // Load vendor private signing key.
             let vendorKey = try loadVendorPrivateKey(from: vendorKeyPath)
-
-            // Generate a fresh Master AES-256 key.
-            let masterAESKey = SymmetricKey(size: .bits256)
 
             // Build the signed payload: key || expiration (UInt64 BE) || fingerprint (UTF-8).
             var payload = Data()
@@ -52,22 +63,19 @@ struct GenerateCert {
             payload.append(contentsOf: withUnsafeBytes(of: &timestamp) { Data($0) })
             payload.append(contentsOf: fingerprint.utf8)
 
-            // Sign with vendor private key.
-            let digest = SHA256.hash(data: payload)
+            let digest    = SHA256.hash(data: payload)
             let signature = try vendorKey.signature(for: digest).derRepresentation
 
-            // Encode certificate to JSON.
             let cert = CertificateJSON(
-                masterAESKey: masterAESKey.withUnsafeBytes { Data($0) }.base64EncodedString(),
-                expirationDate: ISO8601DateFormatter().string(from: expirationDate),
+                masterAESKey:      masterAESKey.withUnsafeBytes { Data($0) }.base64EncodedString(),
+                expirationDate:    ISO8601DateFormatter().string(from: expirationDate),
                 deviceFingerprint: fingerprint,
-                vendorSignature: signature.base64EncodedString()
+                vendorSignature:   signature.base64EncodedString()
             )
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let json = try encoder.encode(cert)
 
-            // Write to output file.
             let outURL = URL(fileURLWithPath: outPath)
             try json.write(to: outURL)
             print("✓ Certificate written to \(outPath)")
@@ -78,13 +86,24 @@ struct GenerateCert {
     }
 }
 
-/// Mirrors LicenseCertificate's Codable layout exactly.
-/// Kept local so generate-cert has zero dependency on LicenseGate.
 private struct CertificateJSON: Encodable {
-    let masterAESKey: String       // base64-encoded raw key bytes
-    let expirationDate: String     // ISO 8601
+    let masterAESKey:      String
+    let expirationDate:    String
     let deviceFingerprint: String
-    let vendorSignature: String    // base64-encoded DER signature
+    let vendorSignature:   String
+}
+
+/// Reads a raw 32-byte AES-256 key from a binary file.
+/// Generate one with: openssl rand -out master_aes.key 32
+private func loadMasterAESKey(from path: String) throws -> SymmetricKey {
+    let data = try Data(contentsOf: URL(fileURLWithPath: path))
+    guard data.count == 32 else {
+        throw NSError(domain: "GenerateCert", code: 1,
+            userInfo: [NSLocalizedDescriptionKey:
+                "master_aes.key must be exactly 32 bytes (got \(data.count)). " +
+                "Generate with: openssl rand -out master_aes.key 32"])
+    }
+    return SymmetricKey(data: data)
 }
 
 private func loadVendorPrivateKey(from path: String) throws -> P256.Signing.PrivateKey {

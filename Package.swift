@@ -23,10 +23,23 @@ let package = Package(
             name: "closecode",
             dependencies: [
                 "TUI",
-                "LicenseGate"
+                "LicenseGate",
+                "PromptPipeline"
             ],
             path: "Sources/CloseCode",
-        ),
+            resources: [
+                .copy("Resources/ast.bundle"),
+                .copy("Resources/rag.bundle"),
+            ],
+            swiftSettings: [
+                    .unsafeFlags([
+                        "-Xlinker", "-sectcreate",
+                        "-Xlinker", "__TEXT",
+                        "-Xlinker", "__entitlements",
+                        "-Xlinker", "Sources/CloseCode/CloseCode.entitlements"
+                    ])
+                ]
+                    ),
         .target(
             name: "TUI",
             dependencies: [
@@ -34,6 +47,11 @@ let package = Package(
                 "LicenseGate"
             ],
             path: "Sources/TUI"
+        ),
+        .target(
+            name: "PromptPipeline",
+            dependencies: [],
+            path: "Sources/PromptPipeline"
         ),
         .target(
             name: "LicenseGate",

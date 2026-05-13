@@ -1,8 +1,10 @@
 import TUIkit
 import LicenseGate
 import Foundation
+import PromptPipeline
 
 public nonisolated(unsafe) var sharedLicenseInfo: LicenseInfo? = nil
+public nonisolated(unsafe) var sharedAssetStore: AssetStore? = nil
 
 public struct TUIRenderer: App {
     public init() {}
@@ -120,7 +122,6 @@ struct PromptView: View {
 
         case "/help":
             outputLines = [
-                "1.",
                 "CloseCode - Hardware-Locked AI Code Assistant",
                 "  License is bound to this device via the Secure Enclave.",
                 "  The master AES key never exists in plaintext on disk.",
@@ -130,63 +131,6 @@ struct PromptView: View {
                 "  /status  Show license details",
                 "  /exit    Quit CloseCode",
                 "  <prompt> Submit a prompt (Phase 2: not yet implemented)",
-                "",
-                "2.",
-                "CloseCode - Hardware-Locked AI Code Assistant",
-                "  License is bound to this device via the Secure Enclave.",
-                "  The master AES key never exists in plaintext on disk.",
-                "",
-                "Commands:",
-                "  /help    Show this message",
-                "  /status  Show license details",
-                "  /exit    Quit CloseCode",
-                "  <prompt> Submit a prompt (Phase 2: not yet implemented)",
-                "",
-                "3.",
-                "CloseCode - Hardware-Locked AI Code Assistant",
-                "  License is bound to this device via the Secure Enclave.",
-                "  The master AES key never exists in plaintext on disk.",
-                "",
-                "Commands:",
-                "  /help    Show this message",
-                "  /status  Show license details",
-                "  /exit    Quit CloseCode",
-                "  <prompt> Submit a prompt (Phase 2: not yet implemented)",
-                "",
-                "4.",
-                "CloseCode - Hardware-Locked AI Code Assistant",
-                "  License is bound to this device via the Secure Enclave.",
-                "  The master AES key never exists in plaintext on disk.",
-                "",
-                "Commands:",
-                "  /help    Show this message",
-                "  /status  Show license details",
-                "  /exit    Quit CloseCode",
-                "  <prompt> Submit a prompt (Phase 2: not yet implemented)",
-                "",
-                "5.",
-                "CloseCode - Hardware-Locked AI Code Assistant",
-                "  License is bound to this device via the Secure Enclave.",
-                "  The master AES key never exists in plaintext on disk.",
-                "",
-                "Commands:",
-                "  /help    Show this message",
-                "  /status  Show license details",
-                "  /exit    Quit CloseCode",
-                "  <prompt> Submit a prompt (Phase 2: not yet implemented)",
-                "",
-                "6.",
-                "CloseCode - Hardware-Locked AI Code Assistant",
-                "  License is bound to this device via the Secure Enclave.",
-                "  The master AES key never exists in plaintext on disk.",
-                "",
-                "Commands:",
-                "  /help    Show this message",
-                "  /status  Show license details",
-                "  /clear   Clear the screen",
-                "  /exit    Quit CloseCode",
-                "  <prompt> Submit a prompt (Phase 2: not yet implemented)",
-                "",
             ]
 
         case "/status":
@@ -204,10 +148,13 @@ struct PromptView: View {
             outputLines = ["Type /help for available commands."]
 
         default:
-            outputLines = [
-                "Unknown command: \(trimmed)",
-                "Type /help for available commands.",
-            ]
+            Task {
+                guard let assets = sharedAssetStore else { return }
+                let pipeline = PromptPipeline(assets: assets)
+                let enriched = await pipeline.process(userQuery: trimmed)
+                // enriched.rendered is the final prompt string → inference server
+                outputLines = ["[Pipeline ready] \(enriched.rendered)"]
+            }
         }
     }
 }

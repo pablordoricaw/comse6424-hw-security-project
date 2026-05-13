@@ -61,10 +61,13 @@ private func runUseFlow() {
         let gate = LicenseGate()
         let licenseInfo = try gate.unlock()
 
-        // masterAESKey scoped here — decryption happens before TUI launch (Phase 2)
-        _ = licenseInfo.masterAESKey  // TODO: pass to AssetStore.decrypt()
+        // Decrypt and dlopen AST + RAG dylibs before TUI starts.
+        // AssetStore holds the dlopen handles for the app's lifetime.
+        let assets = AssetStore()
+        try assets.load(masterAESKey: licenseInfo.masterAESKey)
 
-        runTUI(licenseInfo: licenseInfo)
+        runTUI(licenseInfo: licenseInfo, assets: assets)
+
     } catch LicenseGateError.noLicenseToken {
         exit(withError: "Not activated. Run: swift run closecode --activate <certificate>")
     } catch LicenseGateError.licenseExpired(let date) {
@@ -78,9 +81,9 @@ private func runUseFlow() {
 }
 
 @MainActor
-private func runTUI(licenseInfo: LicenseInfo) {
-// private func runTUI(licenseInfo: LicenseInfo, assets: AssetStore) {
+private func runTUI(licenseInfo: LicenseInfo, assets: AssetStore) {
     sharedLicenseInfo = licenseInfo
+    sharedAssetStore = assets
     TUIRenderer.main()
 }
 
