@@ -1,0 +1,114 @@
+============================================================
+  CloseCode Phase 3 Attack Simulation Suite
+  Tue May 12 23:53:54 EDT 2026
+  Cert: license.cert
+============================================================
+
+------------------------------------------------------------
+Attack 1: License Token Copy / Transfer to Another Machine
+  STRIDE: Spoofing + Elevation of Privilege
+  Simulation: Delete SE-bound token (simulates token on wrong
+              machine Wrapped_AES_Key is device-bound).
+  Expected:   License Gate detects missing token, fails closed.
+
+  ✅ PASS: Missing token → app fails closed
+     Matched: "not activated\|no license\|tokenNotFound\|activate\|not found"
+  ✅ PASS: Proprietary assets not exposed
+     Correctly did not expose: "Pipeline ready\|AST Context\|RAG Context"
+  ↩ Re-activating from license.cert...
+Building for debugging...
+[0/3] Write swift-version-66A549C9551EAF8.txt
+Build of product 'closecode' complete! (0.10s)
+✓ Activation successful. CloseCode is licensed on this device.
+
+------------------------------------------------------------
+Attack 2: Filesystem Tampering with Encrypted Asset Bundles
+  STRIDE: Tampering
+  Simulation: Flip byte at offset 20 in ast.bundle (past the
+              12-byte nonce) invalidates AES-GCM auth tag.
+  Expected:   Decryption fails; app fails closed.
+
+  ✅ PASS: Tampered bundle → AES-GCM auth tag rejected
+     Matched: "decryption failed\|authentication\|corrupt\|load failed\|startup failed"
+  ✅ PASS: Tampered bundle does not expose assets
+     Correctly did not expose: "Pipeline ready\|AST Context\|RAG Context"
+  ↩ Restored original ast.bundle
+
+------------------------------------------------------------
+Attack 3: Keychain Token Corruption
+  STRIDE: Tampering
+  Simulation: Overwrite Keychain token blob with invalid JSON.
+  Expected:   Token decode fails before SE is contacted.
+
+  ✅ PASS: Corrupted token → decode failure
+     Matched: "decode\|corrupt\|invalid\|token\|failed\|activate"
+  ✅ PASS: Corrupted token does not reach SE
+     Correctly did not expose: "Pipeline ready\|AST Context\|RAG Context"
+  ↩ Re-activating from license.cert...
+warning: 'project': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/pablordoricaw/Documents/Projects/columbia/spring-2026/comse6424-hw-security/project/Sources/CloseCode/CloseCode.entitlements
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version-66A549C9551EAF8.txt
+[1/4] Copying ast.bundle
+Build of product 'closecode' complete! (0.22s)
+✓ Activation successful. CloseCode is licensed on this device.
+
+------------------------------------------------------------
+Attack 4: No License Token Present (Cold Start)
+  STRIDE: Denial of Service
+  Simulation: Delete token, cold-start the app.
+  Expected:   App fails closed, prompts for activation.
+
+  ✅ PASS: No token → app prompts for activation
+     Matched: "not activated\|no license\|activate\|not found\|tokenNotFound\|startup failed\|decode\|format"
+  ✅ PASS: No token → assets never loaded
+     Correctly did not expose: "Pipeline ready\|AST Context\|RAG Context"
+  ↩ Re-activating from license.cert...
+Building for debugging...
+[0/3] Write swift-version-66A549C9551EAF8.txt
+Build of product 'closecode' complete! (0.10s)
+✓ Activation successful. CloseCode is licensed on this device.
+
+------------------------------------------------------------
+Attack 5: Expired License Certificate
+  STRIDE: Tampering
+  Simulation: Generate cert with past expiry, attempt activate.
+  Expected:   License Gate rejects expired cert at activation.
+  Note:       Clock rollback bypass is accepted residual risk
+              (documented in docs/CHECKPOINT_1.md).
+
+Building for debugging...
+[0/3] Write swift-version-66A549C9551EAF8.txt
+Build of product 'closecode' complete! (0.10s)
+✓ Deactivated. SE key and license token removed from this device.
+  Device fingerprint: 9E570AA0-6871-5CB9-BE57-B647E25F4738
+Building for debugging...
+[0/3] Write swift-version-66A549C9551EAF8.txt
+Build of product 'generate-cert' complete! (0.10s)
+usage: generate-cert \
+    --fingerprint <IOPlatformUUID> \
+    --expiration <YYYY-MM-DD> \
+    --master-key <path/to/master_aes.key> \
+    --vendor-key <path/to/vendor_private.pem> \
+    --out <path/to/license.cert>  ✅ PASS: Expired cert rejected at activation
+     Matched: "expired\|expiration\|invalid\|rejected\|past"
+  ✅ PASS: Expired cert does not activate
+     Correctly did not expose: "activated\|success\|Pipeline ready"
+  ↩ Re-activating from license.cert...
+Building for debugging...
+[0/3] Write swift-version-66A549C9551EAF8.txt
+Build of product 'closecode' complete! (0.10s)
+✓ Activation successful. CloseCode is licensed on this device.
+
+============================================================
+  Results: 10/10 passed, 0/10 failed
+  Log: /Users/pablordoricaw/Documents/Projects/columbia/spring-2026/comse6424-hw-security/project/logs/attack-simulation.log
+
+  Tier 2 attacks NOT simulated (accepted residual risk):
+  - IOPlatformUUID spoofing (requires Frida / SIP disabled)
+  - Post-unlock memory extraction (requires kernel debugger)
+  - Microarchitectural side-channel attacks
+  - System clock rollback / expiration bypass
+    (documented in docs/CHECKPOINT_1.md § Residual Risk)
+============================================================
