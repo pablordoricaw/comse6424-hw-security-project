@@ -167,15 +167,15 @@ The terminal UI is built with TUIKit, a custom Swift library implementing a full
 
 **After launch (`/clear` state):**
 
-<img src="./figs/closecode-clear.png" width="900" />
+<img src="./figs/closecode-clear.png" width="500" />
 
 **`/help` command:**
 
-<img src="./figs/closecode-help.png" width="900" />
+<img src="./figs/closecode-help.png" width="500" />
 
 **Live prompt: "Hello CloseCode!":**
 
-<img src="./figs/closecode-prompt.png" width="900" />
+<img src="./figs/closecode-prompt.png" width="500" />
 
 ## 6. Threat Model
 
