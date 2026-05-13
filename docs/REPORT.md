@@ -31,6 +31,7 @@ The application runs exclusively on macOS 15+ with Apple Silicon. The Secure Enc
 
 The central security claim is that bypassing the license check in software alone is insufficient to access the proprietary functionality. An attacker who manages to patch a branch condition or hook a return value still does not obtain the `Master_AES_Key` needed to decrypt the engines. The hardware must participate in every successful unlock.
 
+> **Scope note:** The AST and RAG engines are stubs that simulate the behavior of real proprietary enrichment engines -- they do not perform actual static analysis or vector retrieval. Similarly, the embedded inference runtime is not implemented; the Prompt Pipeline assembles and surfaces the enriched prompt but does not submit it to a local LLM. The project scope is intentionally focused on the licensing and security enforcement infrastructure rather than on building a production AI agent.
 
 ## 3. System Architecture
 
@@ -49,7 +50,7 @@ CloseCode is structured as a Swift Package with six distinct modules. Each modul
 
 The C4 component diagram below shows all internal processes, their data flows, and the trust boundaries they cross.
 
-<img src="docs/figs/c4-component-diagram.png" width="1200" />
+<img src="./docs/figs/c4-component-diagram.png" width="1200" />
 
 The diagram identifies three trust boundaries relevant to the security analysis:
 
@@ -73,11 +74,19 @@ The AST engine and RAG engine are compiled as standalone Swift dylibs (`ast_engi
 
 For each user, the vendor generates a `LicenseCertificate`: a JSON document containing the `licenseId`, an `expirationDate`, the user's `deviceFingerprint` (`IOPlatformUUID`), and the plaintext `Master_AES_Key`. This entire document is signed using the vendor's P-256 private key via CryptoKit's `P256.Signing`. The signature prevents any field from being forged or altered without detection.
 
-```JSON
-// Todo: Add example of License Certificate
+An example certificate (with key material truncated for readability):
+
+```json
+{
+  "licenseId": "550e8400-e29b-41d4-a716-446655440000",
+  "expirationDate": "2027-05-12",
+  "deviceFingerprint": "9E570AA0-6871-5CB9-BE57-B647E25F4738",
+  "masterAESKey": "base64encodedAES256KeyMaterial==",
+  "vendorSignature": "base64encodedP256Signature=="
+}
 ```
-```
-```
+
+The certificate is delivered out-of-band to the user (e.g., by email) and is not stored on the device after a production activation. For the purposes of security testing in this project, the `license.cert` file is intentionally retained on disk after activation so that the attack simulation suite (`scripts/simulate-attacks.sh`) can restore a valid activation state between attack scenarios by re-running `--activate`. In a production deployment, the certificate file should be deleted or handed off securely after the initial activation completes.
 
 ### 4.3 Activation: Hardware Binding
 
@@ -123,25 +132,29 @@ The project is a single Swift Package (`Package.swift`) defining six executable 
 
 `PromptPipeline` handles the AES-GCM decryption of both bundles at runtime. It reads the nonce from the first 12 bytes of each bundle file, calls CryptoKit's `AES.GCM.open`, and on authentication failure throws immediately rather than attempting any partial use of the data. The `dlopen` approach ensures the dylibs are never written to a persistent location after decryption -- the temporary file exists only for the duration of the `dlopen` call and is unlinked immediately after.
 
+Because the AST and RAG engines are stubs in this implementation, the pipeline decrypts, loads, and calls into the dylibs successfully -- but the enrichment output is simulated rather than derived from real static analysis or vector retrieval. This is sufficient to validate the full cryptographic enforcement path end-to-end.
+
 ### 5.5 Asset Encryption Script
 
 `scripts/encrypt-assets.sh` is the vendor-side tool that prepares the encrypted bundles for distribution. It compiles each engine dylib with `swiftc -emit-library`, code-signs it with the vendor identity, generates a fresh 12-byte random nonce, and encrypts the dylib using `openssl enc -aes-256-gcm`. The output is the `nonce || ciphertext+tag` binary format consumed by `PromptPipeline`.
 
 ### 5.6 TUI Renderer
 
-CloseCode runs as a full-screen terminal UI. The following screenshots show the application after launch, the `/help` command output, and a live prompt interaction.
+The terminal UI is built with TUIKit, a custom Swift library implementing a full-screen split-pane layout using ANSI escape sequences and raw terminal mode. TUIKit manages the input loop, cursor positioning, scrollable output pane, and status bar rendering entirely in-process with no external UI framework dependency. The full-screen design means there is no external process boundary between the user interface and the prompt enrichment logic, which removes a class of interception seam that would exist if the TUI communicated with the backend over a local socket or pipe.
+
+### 5.7 CloseCode in Action
 
 **After launch (`/clear` state):**
 
-<img src="docs/figs/closecode-clear.png" width="900" />
+<img src="./docs/figs/closecode-clear.png" width="900" />
 
 **`/help` command:**
 
-<img src="docs/figs/closecode-help.png" width="900" />
+<img src="./docs/figs/closecode-help.png" width="900" />
 
 **Live prompt: "Hello CloseCode!":**
 
-<img src="docs/figs/closecode-prompt.png" width="900" />
+<img src="./docs/figs/closecode-prompt.png" width="900" />
 
 ## 6. Threat Model
 
@@ -178,7 +191,7 @@ The key insight across all STRIDE categories is that cryptographic binding conve
 
 ## 7. Security Validation
 
-Phase 3 validation runs `scripts/simulate-attacks.sh`, which automates five attack scenarios against a live activated instance of CloseCode and asserts both that the expected error fires and that proprietary assets (`Pipeline ready`, `AST Context`, `RAG Context`) are never exposed.
+Phase 3 validation runs `scripts/simulate-attacks.sh`, which automates five attack scenarios against a live activated instance of CloseCode and asserts both that the expected error fires and that proprietary assets (`Pipeline ready`, `AST Context`, `RAG Context`) are never exposed. The full simulation output is logged to `logs/attack-simulation.log`.
 
 ```
 Results: 10/10 passed, 0/10 failed
@@ -198,10 +211,6 @@ Results: 10/10 passed, 0/10 failed
 
 ## 8. Residual Risk
 
-### Pre-Activation License Sharing
-
-Because CloseCode is fully offline and has no license server, there is no central ledger to prevent a purchaser from sharing their `LicenseCertificate` with a second person. Both parties can independently activate on their respective machines and generate valid hardware-bound tokens. Once activated, the token cannot be transferred to a third machine, satisfying the node-locked property -- but the initial sharing step is not preventable without a network-connected activation server, which would violate the offline design requirement.
-
 ### Post-Unlock Memory Extraction (Tier 2)
 
 To function, CloseCode must hold the plaintext `Master_AES_Key` in RAM during the decryption window, and the decrypted engine dylibs must reside in memory for the duration of the session. A Tier 2 researcher who legitimately activates the software on their own machine, disables SIP, and attaches a kernel-level debugger or memory forensics tool can dump the plaintext assets from RAM. This is accepted: the cryptographic binding forces the attacker to operate dynamically on a legitimate device rather than statically on a copy, raising the bar from "patch a binary" to "instrument a running process." If they succeed, they earned it.
@@ -218,7 +227,7 @@ A root-capable user can delete the Keychain token or corrupt the encrypted bundl
 
 Because CloseCode operates fully offline, it relies on the local macOS system clock to evaluate whether a license has expired. A root-capable user can disconnect from the network, roll back the system clock to a date before the certificate expiration, and successfully activate or reuse an expired license. The expiration date inside the `LicenseToken` is protected by the vendor signature and cannot be altered, but the *evaluation* of that date depends on an input the attacker controls.
 
-A possible mitigation would be to implement a monotonic timekeeping mechanism inside the application -- for example, recording the last-seen system time in an SE-protected counter and refusing to run if the current time appears to have moved backward by more than a configurable tolerance. This would make clock rollback detectable without requiring a network call. However, implementing a reliable, tamper-evident local clock that handles legitimate user scenarios (DST changes, NTP corrections, machine sleep/wake) with low false-positive rates was beyond the scope of what could be completed in the project timeline. It remains the most actionable known improvement to the expiration enforcement mechanism.
+A possible mitigation would be to implement a monotonic timekeeping mechanism inside the application -- for example, recording the last-seen system time in a Keychain item or SE-protected counter and refusing to run if the current time appears to have moved backward beyond a configurable tolerance. This would make clock rollback detectable without requiring a network call. However, implementing a reliable, tamper-evident local clock that correctly handles legitimate user scenarios such as DST changes, NTP corrections, and machine sleep/wake cycles with low false-positive rates was beyond the scope of what could be completed in the project timeline. It remains the most actionable known improvement to the expiration enforcement mechanism.
 
 ***
 
